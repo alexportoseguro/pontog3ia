@@ -194,7 +194,7 @@ function App() {
   const handleClockAction = async (action: 'start' | 'pause' | 'resume' | 'stop') => {
     if (action === 'start') {
       // Check if Facial Recognition is required by company settings
-      const requiresFaceAuth = companySettings?.require_facial_recognition ?? true; // Default true for security
+      const requiresFaceAuth = companySettings?.require_facial_recognition ?? false; // Default false - admin must opt-in
 
       if (requiresFaceAuth) {
         setPendingAction(action);

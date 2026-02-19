@@ -1,25 +1,42 @@
 {
     "cli": {
-        "version": ">= 3.0.0"
+        "version": ">= 3.0.0",
+        "appVersionSource": "local"
     },
     "build": {
         "development": {
             "developmentClient": true,
-            "distribution": "internal"
+            "distribution": "internal",
+            "env": {
+                "EXPO_PUBLIC_API_URL": "http://localhost:3000"
+            }
         },
         "preview": {
             "distribution": "internal",
+            "channel": "preview",
             "android": {
                 "buildType": "apk"
+            },
+            "env": {
+                "EXPO_PUBLIC_API_URL": "https://pontog3ia.vercel.app",
+                "EXPO_PUBLIC_SUPABASE_URL": "https://imdwscrltdbvgltxiciq.supabase.co",
+                "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImltZHdzY3JsdGRidmdsdHhpY2lxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwOTI2NTIsImV4cCI6MjA4NjY2ODY1Mn0.akBnUTzt5tdveZ9XKJy8LCOL4Ak2SxNPz_EMiFXqXoA"
             }
         },
         "production": {
+            "channel": "production",
             "android": {
                 "buildType": "app-bundle"
+            },
+            "env": {
+                "EXPO_PUBLIC_API_URL": "https://pontog3ia.vercel.app",
+                "EXPO_PUBLIC_SUPABASE_URL": "https://imdwscrltdbvgltxiciq.supabase.co",
+                "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImltZHdzY3JsdGRidmdsdHhpY2lxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwOTI2NTIsImV4cCI6MjA4NjY2ODY1Mn0.akBnUTzt5tdveZ9XKJy8LCOL4Ak2SxNPz_EMiFXqXoA"
             }
         },
         "production-apk": {
             "extends": "production",
+            "channel": "production",
             "android": {
                 "buildType": "apk"
             }

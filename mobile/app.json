@@ -1,10 +1,11 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "PontoG3",
     "slug": "mobile",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "scheme": "pontog3",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -13,10 +14,12 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pontog3.mobile"
     },
     "android": {
       "package": "com.pontog3.mobile",
+      "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -39,23 +42,26 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow PontoG3 to use your location to track work hours."
+          "locationAlwaysAndWhenInUsePermission": "Permitir que o PontoG3 use sua localização para registrar o ponto.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow PontoG3 to access your camera for facial recognition."
+          "cameraPermission": "Permitir que o PontoG3 acesse sua câmera para o reconhecimento facial."
         }
       ],
       [
         "expo-av",
         {
-          "microphonePermission": "Allow PontoG3 to access your microphone for voice commands."
+          "microphonePermission": "Permitir que o PontoG3 acesse seu microfone para comandos de voz."
         }
       ]
     ],
     "extra": {
+      "apiUrl": "https://pontog3ia.vercel.app",
       "eas": {
         "projectId": "f536f7d0-1cef-4bde-89c1-66ce4c983807"
       }

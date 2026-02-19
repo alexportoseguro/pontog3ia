@@ -102,7 +102,7 @@ export default function SettingsPage() {
                         state: company.state || '',
                         zip_code: company.zip_code || ''
                     })
-                    setRequireAuditoria(company.require_facial_recognition ?? true)
+                    setRequireAuditoria(company.require_facial_recognition ?? false)
                 }
             }
         } catch (error) {
