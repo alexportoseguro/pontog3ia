@@ -47,7 +47,8 @@ export async function POST(request: Request) {
             supabaseAdmin
         )
 
-        // 5. Insert Event
+
+        // 5. Insert Event (base insert without optional columns)
         const { data: event, error: insertError } = await supabaseAdmin
             .from('time_events')
             .insert({
@@ -55,13 +56,20 @@ export async function POST(request: Request) {
                 event_type: eventType,
                 timestamp: timestamp,
                 location: location,
-                is_flagged: anomaly.isFlagged,
-                flag_reason: anomaly.reason
             })
             .select()
             .single()
 
         if (insertError) throw insertError
+
+        // 6. Try to update with anomaly data (non-blocking - columns may not exist yet)
+        if (event?.id && (anomaly.isFlagged || anomaly.reason)) {
+            await supabaseAdmin
+                .from('time_events')
+                .update({ is_flagged: anomaly.isFlagged, flag_reason: anomaly.reason })
+                .eq('id', event.id)
+                .then(() => { }) // Ignore errors - columns may not exist yet
+        }
 
         // 6. Update Profile Status
         const statusMap: Record<string, string> = {
