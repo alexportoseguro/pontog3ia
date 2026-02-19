@@ -1,11 +1,10 @@
 
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { ArrowLeftIcon, UserIcon } from '@heroicons/react/24/outline'
 
 export default async function CompanyDetailPage({ params }: { params: { id: string } }) {
-    const supabase = createServerComponentClient({ cookies })
+    const supabase = await createClient()
 
     // Fetch company
     const { data: company, error } = await supabase
@@ -41,8 +40,8 @@ export default async function CompanyDetailPage({ params }: { params: { id: stri
                     </div>
                     <div className="flex gap-3">
                         <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${company.subscription_status === 'active'
-                                ? 'bg-green-50 text-green-700 border-green-200'
-                                : 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                            ? 'bg-green-50 text-green-700 border-green-200'
+                            : 'bg-yellow-50 text-yellow-700 border-yellow-200'
                             }`}>
                             {company.subscription_status?.toUpperCase() || 'UNKNOWN'}
                         </span>

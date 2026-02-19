@@ -1,11 +1,10 @@
 
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { PlusIcon } from '@heroicons/react/24/solid'
 
 export default async function AdminDashboard() {
-    const supabase = createServerComponentClient({ cookies })
+    const supabase = await createClient()
 
     // Fetch companies
     const { data: companies, error } = await supabase

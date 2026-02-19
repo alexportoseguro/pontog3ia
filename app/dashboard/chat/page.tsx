@@ -2,7 +2,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/lib/supabase/client'
 import { PaperAirplaneIcon, UserIcon, BuildingOffice2Icon } from '@heroicons/react/24/solid'
 
 type Message = {
@@ -19,7 +19,7 @@ export default function ChatPage() {
     const [loading, setLoading] = useState(false)
     const [user, setUser] = useState<any>(null)
     const scrollRef = useRef<HTMLDivElement>(null)
-    const supabase = createClientComponentClient()
+    const supabase = createClient()
 
     useEffect(() => {
         getUser()
@@ -117,8 +117,8 @@ export default function ChatPage() {
                                     <UserIcon className="w-4 h-4" />
                                 </div>
                                 <div className={`p-3 rounded-2xl ${isMe
-                                        ? 'bg-blue-600 text-white rounded-tr-none'
-                                        : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none shadow-sm'
+                                    ? 'bg-blue-600 text-white rounded-tr-none'
+                                    : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none shadow-sm'
                                     }`}>
                                     {!isMe && <p className="text-xs font-bold mb-1 text-slate-400">{msg.sender?.full_name || msg.sender?.email}</p>}
                                     <p className="text-sm">{msg.content}</p>
