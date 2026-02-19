@@ -32,10 +32,11 @@ export async function POST(request: Request) {
         }
 
         if (contentType.includes('multipart/form-data')) {
-            const formData = await request.formData();
-            const file = formData.get('audio') as File;
+            const rawFormData = await request.formData();
+            const formData = rawFormData as unknown as { get: (key: string) => File | null };
+            const file = formData.get('audio');
 
-            if (file) {
+            if (file && file.arrayBuffer) {
                 isAudio = true;
                 audioMimeType = file.type || 'audio/m4a';
                 const arrayBuffer = await file.arrayBuffer();

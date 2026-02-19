@@ -15,8 +15,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: auth.error }, { status: auth.status })
         }
 
-        const formData = await request.formData()
-        const file = formData.get('file') as File
+        const rawFormData = await request.formData()
+        const formData = rawFormData as unknown as { get: (key: string) => File | null }
+        const file = formData.get('file')
 
         if (!file) {
             return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })

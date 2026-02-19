@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { verifyAuth, supabaseAdmin } from '@/lib/auth-server'
+import { verifyAuth, checkAdminRole, supabaseAdmin } from '@/lib/auth-server'
 
 export async function GET(request: Request) {
     try {

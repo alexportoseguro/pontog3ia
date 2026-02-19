@@ -20,15 +20,16 @@ export async function GET(request: Request) {
 
         // --- Granular RBAC ---
         const isManager = auth.role === 'admin' || auth.role === 'manager'
+        const currentUserId = auth.user?.id
 
         if (!isManager) {
             // If employee, they MUST provide their own ID or no ID (if no ID, we force their ID)
-            if (userId && userId !== auth.user.id) {
+            if (userId && userId !== currentUserId) {
                 return NextResponse.json({ error: 'Forbidden: You can only access your own data' }, { status: 403 })
             }
         }
 
-        const targetUserId = isManager ? userId : auth.user.id
+        const targetUserId = isManager ? userId : currentUserId
 
         const today = new Date()
         const sevenDaysAgo = new Date()

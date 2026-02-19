@@ -6,10 +6,11 @@ import { jsPDF } from 'jspdf'
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
     // 1. Auth Check (Any authenticated user can view their own receipt, Manager/Admin can view any?)
     // Let's restrict to own receipt or Admin/Manager.
-    const auth = await verifyAuth(request)
+    const auth = await verifyAuth()
     if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
     const user = auth.user
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const { id } = await context.params
 
     try {
@@ -24,7 +25,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
         // 3. Authorization: User must own the event OR be admin/manager of the same company
         const isOwner = event.user_id === user.id
-        const isAdmin = (user.role === 'admin' || user.role === 'manager') && user.company_id === event.company_id
+        const isAdmin = (auth.role === 'admin' || auth.role === 'manager') && auth.companyId === event.company_id
 
         if (!isOwner && !isAdmin) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })

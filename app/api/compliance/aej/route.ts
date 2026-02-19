@@ -7,7 +7,9 @@ export async function GET(request: Request) {
     const auth = await checkAdminRole()
     if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
-    const admin = auth.user
+    const companyId = auth.companyId
+    if (!companyId) return NextResponse.json({ error: 'Company not found' }, { status: 401 })
+
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('startDate') // yyyy-mm-dd
     const endDate = searchParams.get('endDate')
@@ -17,7 +19,7 @@ export async function GET(request: Request) {
         const { data: company } = await supabaseAdmin
             .from('companies')
             .select('*')
-            .eq('id', admin.company_id)
+            .eq('id', companyId)
             .single()
 
         if (!company) throw new Error('Company not found')
@@ -26,14 +28,14 @@ export async function GET(request: Request) {
         const { data: employees } = await supabaseAdmin
             .from('profiles')
             .select('id, full_name, cpf, pis') // Need PIS?
-            .eq('company_id', admin.company_id)
+            .eq('company_id', companyId)
             .eq('role', 'employee') // Only employees?
 
         // Fetch Markings (Type 05)
         let query = supabaseAdmin
             .from('time_events')
             .select('*')
-            .eq('company_id', admin.company_id)
+            .eq('company_id', companyId)
             .order('timestamp', { ascending: true })
 
         if (startDate) query = query.gte('timestamp', `${startDate}T00:00:00`)
