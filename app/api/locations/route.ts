@@ -12,16 +12,29 @@ export async function GET(request: Request) {
         const history = searchParams.get('history') === 'true'
 
         if (userId && history) {
-            // Get path history for specific user (last 24 hours)
+            // Step 1: verify user belongs to admin's company
+            const { data: targetProfile } = await supabaseAdmin
+                .from('profiles')
+                .select('company_id')
+                .eq('id', userId)
+                .single()
+
+            if (targetProfile?.company_id !== auth.companyId) {
+                return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+            }
+
+            // Step 2: get location history (last 24h)
             const { data, error } = await supabaseAdmin
-                .from('location_logs') // Corrected table name
-                .select('id, latitude, longitude, timestamp, user_id, profiles!inner(company_id)')
+                .from('location_logs')
+                .select('id, latitude, longitude, timestamp, user_id')
                 .eq('user_id', userId)
-                .eq('profiles.company_id', auth.companyId)
                 .gte('timestamp', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
                 .order('timestamp', { ascending: true })
 
-            if (error) throw error
+            if (error) {
+                console.error('location_logs error:', error)
+                return NextResponse.json([]) // Return empty instead of crashing
+            }
             return NextResponse.json(data || [])
         }
 

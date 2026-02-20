@@ -166,21 +166,21 @@ export default function MapPage() {
         return () => clearInterval(interval)
     }, [])
 
-    // Apply filters
+    // Apply filters — normalize status to lowercase for comparison
     useEffect(() => {
         let filtered = locations
         if (statusFilter !== 'all') {
-            filtered = filtered.filter(loc => loc.current_status === statusFilter)
+            filtered = filtered.filter(loc => (loc.current_status || '').toLowerCase() === statusFilter)
         }
         setFilteredLocations(filtered)
     }, [locations, statusFilter])
 
-    // Calculate stats
+    // Calculate stats — case-insensitive
     const stats = {
         total: locations.length,
-        working: locations.filter(l => l.current_status === 'working').length,
-        break: locations.filter(l => l.current_status === 'break').length,
-        offline: locations.filter(l => !l.current_status || l.current_status === 'out').length
+        working: locations.filter(l => (l.current_status || '').toLowerCase() === 'working').length,
+        break: locations.filter(l => (l.current_status || '').toLowerCase() === 'break').length,
+        offline: locations.filter(l => !l.current_status || (l.current_status || '').toLowerCase() === 'out' || (l.current_status || '').toLowerCase() === 'offline').length
     }
 
     function getStatusBadge(status: string) {
@@ -386,6 +386,7 @@ export default function MapPage() {
                             locations={filteredLocations}
                             selectedUserId={selectedEmployee}
                             onMarkerClick={(userId) => setSelectedEmployee(userId)}
+                            onViewDetails={(loc) => openDetails(loc)}
                         />
                     </div>
 
