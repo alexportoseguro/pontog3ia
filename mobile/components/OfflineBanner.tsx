@@ -1,6 +1,5 @@
-
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,38 +7,38 @@ import {
     OFFLINE_QUEUE_KEY,
     ROUTE_QUEUE_KEY,
     syncOfflineEvents,
-    syncRoutePoints
+    syncRoutePoints,
+    clearLocalQueues
 } from '../services/LocationService';
 import { Theme } from '../lib/Theme';
 
 export default function OfflineBanner() {
     const [isConnected, setIsConnected] = useState<boolean | null>(true);
-    const [pendingItems, setPendingItems] = useState(0);
+    const [pendingEvents, setPendingEvents] = useState(0);
+    const [pendingRoutes, setPendingRoutes] = useState(0);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [syncAttempts, setSyncAttempts] = useState(0);
+
+    const pendingItems = pendingEvents + pendingRoutes;
+
+    const checkPending = useCallback(async () => {
+        try {
+            const offlineEvents = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY);
+            const routePoints = await AsyncStorage.getItem(ROUTE_QUEUE_KEY);
+            setPendingEvents(offlineEvents ? JSON.parse(offlineEvents).length : 0);
+            setPendingRoutes(routePoints ? JSON.parse(routePoints).length : 0);
+        } catch (e) {
+            // ignore
+        }
+    }, []);
 
     useEffect(() => {
-        // 1. Monitor Network State
         const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
             setIsConnected(state.isConnected);
         });
 
-        // 2. Monitor Pending Items (Poll every 5s)
-        const checkPending = async () => {
-            try {
-                const offlineEvents = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY);
-                const routePoints = await AsyncStorage.getItem(ROUTE_QUEUE_KEY);
-
-                const eventsCount = offlineEvents ? JSON.parse(offlineEvents).length : 0;
-                const routesCount = routePoints ? JSON.parse(routePoints).length : 0;
-
-                setPendingItems(eventsCount + routesCount);
-            } catch (e) {
-                // ignore
-            }
-        };
-
-        checkPending(); // check immediately
-        const interval = setInterval(checkPending, 5000);
+        checkPending();
+        const interval = setInterval(checkPending, 8000);
 
         return () => {
             unsubscribe();
@@ -47,38 +46,27 @@ export default function OfflineBanner() {
         };
     }, []);
 
-    // Auto-sync when back online
+    // Auto-sync when back online (max 3 attempts to prevent infinite loops)
     useEffect(() => {
-        if (isConnected && pendingItems > 0 && !isSyncing) {
+        if (isConnected && pendingItems > 0 && !isSyncing && syncAttempts < 3) {
             handleSync();
         }
-    }, [isConnected, pendingItems]);
+    }, [isConnected]);
 
     const handleSync = async () => {
         if (isSyncing) return;
-        // Double check real pending count before starting
-        const offlineEvents = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY);
-        const routePoints = await AsyncStorage.getItem(ROUTE_QUEUE_KEY);
-        const realCount = (offlineEvents ? JSON.parse(offlineEvents).length : 0) +
-            (routePoints ? JSON.parse(routePoints).length : 0);
-
-        if (realCount === 0) {
-            setPendingItems(0);
-            return;
-        }
+        await checkPending();
 
         setIsSyncing(true);
+        setSyncAttempts(prev => prev + 1);
         try {
             await Promise.all([
                 syncOfflineEvents(),
                 syncRoutePoints()
             ]);
-            // Re-check after sync
-            const offlineEvents = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY);
-            const routePoints = await AsyncStorage.getItem(ROUTE_QUEUE_KEY);
-            const eventsCount = offlineEvents ? JSON.parse(offlineEvents).length : 0;
-            const routesCount = routePoints ? JSON.parse(routePoints).length : 0;
-            setPendingItems(eventsCount + routesCount);
+            await checkPending();
+            // Reset attempts on success
+            setSyncAttempts(0);
         } catch (error) {
             console.log('Sync failed', error);
         } finally {
@@ -86,31 +74,70 @@ export default function OfflineBanner() {
         }
     };
 
+    const handleClearQueue = () => {
+        Alert.alert(
+            'Limpar Fila Local',
+            `Isso irá remover ${pendingItems} itens pendentes que não puderam ser sincronizados. Esta ação não pode ser desfeita.\n\nContinuar?`,
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                    text: 'Limpar Tudo',
+                    style: 'destructive',
+                    onPress: async () => {
+                        const { events, routes } = await clearLocalQueues();
+                        await checkPending();
+                        setSyncAttempts(0);
+                        console.log(`🗑️ Manually cleared: ${events} events + ${routes} route points`);
+                    }
+                }
+            ]
+        );
+    };
+
     if (isConnected && pendingItems === 0) return null;
+
+    const showClearButton = syncAttempts >= 3 && pendingItems > 0;
 
     return (
         <View style={[styles.container, !isConnected ? styles.offline : styles.pending]}>
             <View style={styles.content}>
                 <Ionicons
-                    name={!isConnected ? "cloud-offline" : "cloud-upload"}
-                    size={20}
+                    name={!isConnected ? 'cloud-offline' : 'cloud-upload'}
+                    size={18}
                     color="#FFF"
                 />
-                <Text style={styles.text}>
-                    {!isConnected
-                        ? "Você está offline. Dados salvos localmente."
-                        : `${pendingItems} itens pendentes de sincronização...`}
-                </Text>
+                <View>
+                    <Text style={styles.text}>
+                        {!isConnected
+                            ? 'Você está offline. Dados salvos localmente.'
+                            : `${pendingItems} itens pendentes de sincronização`}
+                    </Text>
+                    {isConnected && (pendingRoutes > 0 || pendingEvents > 0) && (
+                        <Text style={styles.subtext}>
+                            {[
+                                pendingRoutes > 0 ? `${pendingRoutes} pontos GPS` : null,
+                                pendingEvents > 0 ? `${pendingEvents} eventos` : null,
+                            ].filter(Boolean).join(' · ')}
+                        </Text>
+                    )}
+                </View>
             </View>
 
             {isConnected && (
-                <TouchableOpacity onPress={handleSync} disabled={isSyncing}>
-                    {isSyncing ? (
-                        <ActivityIndicator size="small" color="#FFF" />
-                    ) : (
-                        <Ionicons name="refresh" size={20} color="#FFF" />
+                <View style={styles.actions}>
+                    {showClearButton && (
+                        <TouchableOpacity onPress={handleClearQueue} style={styles.clearBtn}>
+                            <Ionicons name="trash-outline" size={16} color="#FFF" />
+                        </TouchableOpacity>
                     )}
-                </TouchableOpacity>
+                    <TouchableOpacity onPress={handleSync} disabled={isSyncing} style={styles.syncBtn}>
+                        {isSyncing ? (
+                            <ActivityIndicator size="small" color="#FFF" />
+                        ) : (
+                            <Ionicons name="refresh" size={18} color="#FFF" />
+                        )}
+                    </TouchableOpacity>
+                </View>
             )}
         </View>
     );
@@ -119,7 +146,7 @@ export default function OfflineBanner() {
 const styles = StyleSheet.create({
     container: {
         paddingHorizontal: 16,
-        paddingVertical: 8,
+        paddingVertical: 10,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -128,16 +155,42 @@ const styles = StyleSheet.create({
         backgroundColor: Theme.colors.danger,
     },
     pending: {
-        backgroundColor: Theme.colors.warning,
+        backgroundColor: '#D97706',
     },
     content: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 10,
+        flex: 1,
     },
     text: {
         color: '#FFF',
         fontSize: 12,
-        fontWeight: '600',
-    }
+        fontWeight: '700',
+    },
+    subtext: {
+        color: 'rgba(255,255,255,0.8)',
+        fontSize: 10,
+        fontWeight: '500',
+        marginTop: 1,
+    },
+    actions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    syncBtn: {
+        width: 32,
+        height: 32,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    clearBtn: {
+        width: 32,
+        height: 32,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        borderRadius: 8,
+    },
 });

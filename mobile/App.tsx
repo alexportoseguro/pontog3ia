@@ -34,6 +34,8 @@ function App() {
   const [status, setStatus] = useState<WorkStatus>('STOPPED');
   const [currentScreen, setCurrentScreen] = useState<'home' | 'chat' | 'history'>('home');
   const [loadingAction, setLoadingAction] = useState(false);
+  const [fullName, setFullName] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Biometric Auth State
   const [isBiometricAuth, setIsBiometricAuth] = useState(false);
@@ -50,6 +52,9 @@ function App() {
 
   useEffect(() => {
     fetchCompanySettings();
+    // Update clock every second
+    const clockInterval = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(clockInterval);
   }, []);
 
   async function fetchCompanySettings() {
@@ -97,14 +102,28 @@ function App() {
     }
   };
 
+  async function fetchUserProfile(userId: string) {
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', userId)
+        .single();
+      if (data?.full_name) setFullName(data.full_name);
+    } catch (e) {
+      // ignore
+    }
+  }
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
         restoreStatus();
-        syncOfflineEvents(); // Try to flush offline queue
-        syncRoutePoints(); // Flush route queue
+        syncOfflineEvents();
+        syncRoutePoints();
         registerForPushNotifications(session.user.id);
+        fetchUserProfile(session.user.id);
       }
     });
 
@@ -113,6 +132,9 @@ function App() {
       if (session) {
         restoreStatus();
         registerForPushNotifications(session.user.id);
+        fetchUserProfile(session.user.id);
+      } else {
+        setFullName(null);
       }
     });
   }, []);
@@ -377,13 +399,25 @@ function App() {
       ) : (
         <View style={styles.dashboardContainer}>
           <View style={styles.dashboardHeader}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.greeting}>Bem-vindo,</Text>
-              <Text style={styles.username}>{session.user.email?.split('@')[0]}</Text>
+              <Text style={styles.username} numberOfLines={1}>
+                {fullName || session.user.email?.split('@')[0]}
+              </Text>
             </View>
-            <TouchableOpacity onPress={() => supabase.auth.signOut()} style={styles.logoutButton}>
-              <Ionicons name="power-outline" size={22} color={Theme.colors.danger} />
-            </TouchableOpacity>
+            <View style={styles.headerRight}>
+              <View style={styles.clockContainer}>
+                <Text style={styles.clockTime}>
+                  {currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </Text>
+                <Text style={styles.clockDate}>
+                  {currentTime.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => supabase.auth.signOut()} style={styles.logoutButton}>
+                <Ionicons name="power-outline" size={22} color={Theme.colors.danger} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <OfflineBanner />
@@ -391,7 +425,12 @@ function App() {
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             <View style={styles.statusCard}>
               <View style={styles.statusHeader}>
-                <Text style={styles.statusLabel}>Status Operacional</Text>
+                <View>
+                  <Text style={styles.statusLabel}>Status Operacional</Text>
+                  <Text style={styles.statusSubLabel}>
+                    {currentTime.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                  </Text>
+                </View>
                 <View style={[styles.statusBadge,
                 status === 'WORKING' ? styles.badgeActive :
                   status === 'BREAK' ? styles.badgeWarning : styles.badgeInactive]}>
@@ -401,14 +440,14 @@ function App() {
                   <Text style={[styles.statusText,
                   status === 'WORKING' ? styles.textActive :
                     status === 'BREAK' ? styles.textWarning : styles.textInactive]}>
-                    {status === 'WORKING' ? "ATIVO" : status === 'BREAK' ? "PAUSA" : "OFFLINE"}
+                    {status === 'WORKING' ? 'ATIVO' : status === 'BREAK' ? 'PAUSA' : 'OFFLINE'}
                   </Text>
                 </View>
               </View>
               <Text style={styles.statusDescription}>
-                {status === 'WORKING' ? "Sua jornada está sendo contabilizada e geolocalizada." :
-                  status === 'BREAK' ? "Aproveite seu descanso. Retorne quando estiver pronto." :
-                    "Inicie seu expediente para começar o registro."}
+                {status === 'WORKING' ? '✅ Sua jornada está sendo contabilizada e geolocalizada.' :
+                  status === 'BREAK' ? '☕ Aproveite seu descanso. Retorne quando estiver pronto.' :
+                    '📋 Inicie seu expediente para começar o registro.'}
               </Text>
             </View>
 
@@ -624,14 +663,39 @@ const styles = StyleSheet.create({
   // Dashboard Styles
   dashboardContainer: { flex: 1 },
   dashboardHeader: {
-    padding: 24,
-    paddingTop: Platform.OS === 'android' ? 44 : 20,
+    padding: 20,
+    paddingTop: Platform.OS === 'android' ? 40 : 16,
     backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+    gap: 12,
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: 12,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+  },
+  clockContainer: {
+    alignItems: 'flex-end',
+  },
+  clockTime: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#1E293B',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.5,
+  },
+  clockDate: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#94A3B8',
+    textTransform: 'capitalize',
+    marginTop: 1,
   },
   greeting: {
     fontSize: 14,
@@ -672,8 +736,15 @@ const styles = StyleSheet.create({
   statusHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 16,
+  },
+  statusSubLabel: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '500',
+    marginTop: 2,
+    textTransform: 'capitalize',
   },
   statusLabel: {
     fontSize: 12,
