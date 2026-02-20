@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { headers } from 'next/headers'
+import type { NextRequest } from 'next/server'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -15,10 +16,18 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
     }
 })
 
-export async function verifyAuth() {
+export async function verifyAuth(request?: Request | NextRequest) {
     try {
-        const headerList = await headers()
-        const authHeader = headerList.get('authorization')
+        let authHeader: string | null = null
+
+        if (request) {
+            // Prefer reading directly from request (more reliable in API Routes)
+            authHeader = request.headers.get('authorization')
+        } else {
+            // Fallback for Server Components
+            const headerList = await headers()
+            authHeader = headerList.get('authorization')
+        }
 
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             console.warn('[VerifyAuth] Missing or invalid auth header')

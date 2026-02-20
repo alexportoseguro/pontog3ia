@@ -14,8 +14,8 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
 
 export async function POST(request: Request) {
     try {
-        // 1. Verify Auth
-        const auth = await verifyAuth()
+        // 1. Verify Auth — pass request directly for reliable header reading
+        const auth = await verifyAuth(request)
         if (auth.error) {
             return NextResponse.json({ error: auth.error }, { status: auth.status })
         }
@@ -194,7 +194,7 @@ COMPORTAMENTO:
 
         // 4. Log tool calls to audit (non-blocking)
         if (toolCalls.length > 0) {
-            supabaseAdmin.from('audit_logs').insert({
+            void supabaseAdmin.from('audit_logs').insert({
                 user_id: requesterId,
                 action: 'AI_TOOL_EXECUTION',
                 details: {
@@ -202,7 +202,10 @@ COMPORTAMENTO:
                     tools_called: toolCalls.map(t => t.name),
                     full_calls: toolCalls
                 }
-            }).then(() => { }).catch((e: any) => console.warn('[AI] audit_logs insert failed (non-critical):', e.message))
+            }).then(
+                () => { },
+                (e: any) => console.warn('[AI] audit_logs insert failed (non-critical):', e?.message)
+            )
         }
 
         return NextResponse.json({

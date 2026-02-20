@@ -79,7 +79,11 @@ export default function ConciergePage() {
 
             const data = await response.json()
 
-            if (data.error) throw new Error(data.error)
+            if (!response.ok || data.error) {
+                const errorText = data.error || `Erro HTTP ${response.status}`
+                console.error('[Concierge] Erro da API:', response.status, errorText)
+                throw new Error(errorText)
+            }
 
             const aiMsg: Message = {
                 id: (Date.now() + 1).toString(),
@@ -95,7 +99,7 @@ export default function ConciergePage() {
             const errorMsg: Message = {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
-                content: 'Desculpe, tive um problema ao processar seu pedido. Tente novamente.',
+                content: `⚠️ Erro: ${error.message || 'Falha ao processar pedido. Tente novamente.'}`,
                 timestamp: new Date()
             }
             setMessages(prev => [...prev, errorMsg])
@@ -138,8 +142,8 @@ export default function ConciergePage() {
                                 <div className={`space-y-2 ${isAi ? 'items-start' : 'items-end flex flex-col'}`}>
 
                                     <div className={`p-5 rounded-2xl shadow-sm leading-relaxed text-sm ${isAi
-                                            ? 'bg-white text-slate-700 rounded-tl-none border border-slate-100'
-                                            : 'bg-indigo-600 text-white rounded-tr-none'
+                                        ? 'bg-white text-slate-700 rounded-tl-none border border-slate-100'
+                                        : 'bg-indigo-600 text-white rounded-tr-none'
                                         }`}>
                                         <p className="whitespace-pre-wrap">{msg.content}</p>
                                     </div>
