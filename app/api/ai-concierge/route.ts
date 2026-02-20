@@ -77,7 +77,7 @@ export async function POST(request: Request) {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
         const model = genAI.getGenerativeModel({
-            model: "gemini-2.0-flash-exp",
+            model: "gemini-2.0-flash",
             tools: [{ functionDeclarations: conciergeTools }]
         });
 
@@ -192,17 +192,17 @@ COMPORTAMENTO:
                 .then(() => { });
         }
 
-        // 4. Log tool calls to audit
+        // 4. Log tool calls to audit (non-blocking)
         if (toolCalls.length > 0) {
-            await supabaseAdmin.from('audit_logs').insert({
+            supabaseAdmin.from('audit_logs').insert({
                 user_id: requesterId,
                 action: 'AI_TOOL_EXECUTION',
                 details: {
-                    message_id: msgData.id,
+                    message_id: msgData?.id,
                     tools_called: toolCalls.map(t => t.name),
                     full_calls: toolCalls
                 }
-            })
+            }).then(() => { }).catch((e: any) => console.warn('[AI] audit_logs insert failed (non-critical):', e.message))
         }
 
         return NextResponse.json({
@@ -219,9 +219,20 @@ COMPORTAMENTO:
         })
 
     } catch (error: any) {
-        console.error('AI Processing Error:', error)
-        return NextResponse.json({ error: error.message }, {
-            status: 500,
+        // Log the full error — Gemini errors have a .status and .errorDetails
+        console.error('[AI Concierge] Processing Error:', {
+            message: error?.message,
+            status: error?.status,
+            errorDetails: error?.errorDetails,
+            stack: error?.stack?.split('\n').slice(0, 4).join('\n')
+        })
+        const userMessage = error?.status === 429
+            ? 'Limite de requisições à IA atingido. Tente novamente em alguns segundos.'
+            : error?.status === 503
+                ? 'O serviço de IA está temporariamente indisponível. Tente novamente em breve.'
+                : `Erro ao processar: ${error?.message || 'Erro desconhecido'}`
+        return NextResponse.json({ error: userMessage }, {
+            status: error?.status || 500,
             headers: {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
