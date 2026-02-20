@@ -131,15 +131,24 @@ export default function ChatScreen({ user }: { user: any }) {
         setLoading(true);
 
         try {
-            // Updated to be more resilient (using dynamic API URL)
             const ENDPOINT = `${API_URL}/api/ai-concierge`;
+
+            // Get session token for authentication
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+
+            if (!token) {
+                throw new Error('Sessão expirada. Faça login novamente.');
+            }
 
             const response = await fetch(ENDPOINT, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     message: userMsg.text,
-                    userId: user.id
                 })
             });
 

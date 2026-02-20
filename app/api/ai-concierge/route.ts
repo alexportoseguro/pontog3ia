@@ -54,19 +54,23 @@ export async function POST(request: Request) {
 
         console.log(`[AI Concierge] Verified User: ${requesterId}, Company: ${auth.companyId}, Message: "${message}" (Audio: ${isAudio})`)
 
-        // 1. Log the message
-        const { data: msgData, error: msgError } = await supabaseAdmin
-            .from('employee_messages')
-            .insert({
-                user_id: requesterId,
-                content: message,
-                type: isAudio ? 'audio' : 'text',
-                status: 'processing'
-            })
-            .select()
-            .single()
-
-        if (msgError) throw msgError
+        // 1. Log the message (non-blocking - table may not exist yet)
+        let msgData: any = null;
+        try {
+            const { data, error: msgError } = await supabaseAdmin
+                .from('employee_messages')
+                .insert({
+                    user_id: requesterId,
+                    content: message,
+                    type: isAudio ? 'audio' : 'text',
+                    status: 'processing'
+                })
+                .select()
+                .single();
+            if (!msgError) msgData = data;
+        } catch (e) {
+            console.warn('[AI Concierge] Could not log to employee_messages (table may not exist):', e);
+        }
 
         // 2. AI with Function Calling
         const { GoogleGenerativeAI } = require("@google/generative-ai");
@@ -175,15 +179,18 @@ COMPORTAMENTO:
             if (match) transcription = match[1];
         }
 
-        // 3. Update message
-        await supabaseAdmin
-            .from('employee_messages')
-            .update({
-                status: 'processed',
-                ai_response: finalResponse,
-                content: isAudio ? `[Áudio]: ${transcription}` : message
-            })
-            .eq('id', msgData.id)
+        // 3. Update message (non-blocking)
+        if (msgData?.id) {
+            await supabaseAdmin
+                .from('employee_messages')
+                .update({
+                    status: 'processed',
+                    ai_response: finalResponse,
+                    content: isAudio ? `[Áudio]: ${transcription}` : message
+                })
+                .eq('id', msgData.id)
+                .then(() => { });
+        }
 
         // 4. Log tool calls to audit
         if (toolCalls.length > 0) {
