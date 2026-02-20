@@ -94,6 +94,7 @@ export default function LocationMap({ locations, selectedUserId, onMarkerClick, 
     const [route, setRoute] = useState<[number, number][]>([])
     const [routeUser, setRouteUser] = useState<string | null>(null)
     const [loadingRoute, setLoadingRoute] = useState(false)
+    const [noRouteData, setNoRouteData] = useState(false)
 
     const defaultCenter: [number, number] = [-16.440258, -39.072313]
     const center = locations.length > 0
@@ -103,6 +104,7 @@ export default function LocationMap({ locations, selectedUserId, onMarkerClick, 
     const fetchRoute = useCallback(async (userId: string) => {
         setLoadingRoute(true)
         setRouteUser(userId)
+        setNoRouteData(false)
         try {
             const { data: { session } } = await supabase.auth.getSession()
             const headers: Record<string, string> = {}
@@ -114,12 +116,18 @@ export default function LocationMap({ locations, selectedUserId, onMarkerClick, 
                 const data = await res.json()
                 if (Array.isArray(data) && data.length > 0) {
                     setRoute(data.map((p: any) => [p.latitude, p.longitude] as [number, number]))
+                    setNoRouteData(false)
                 } else {
                     setRoute([])
+                    setNoRouteData(true)
+                    // Clear "no data" message after 4 seconds
+                    setTimeout(() => setNoRouteData(false), 4000)
                 }
             } else {
                 console.warn('Route API error:', res.status)
                 setRoute([])
+                setNoRouteData(true)
+                setTimeout(() => setNoRouteData(false), 4000)
             }
         } catch (e) {
             console.error('Error fetching route', e)
@@ -141,100 +149,172 @@ export default function LocationMap({ locations, selectedUserId, onMarkerClick, 
         } else {
             setRoute([])
             setRouteUser(null)
+            setNoRouteData(false)
         }
     }, [selectedUserId])
 
     return (
-        <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
-            <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+        <div style={{ position: 'relative', height: '100%', width: '100%' }}>
+            {/* Route Loading Overlay */}
+            {loadingRoute && (
+                <div style={{
+                    position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
+                    zIndex: 1000, background: 'rgba(17,24,39,0.85)', backdropFilter: 'blur(8px)',
+                    borderRadius: 16, padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 10,
+                    boxShadow: '0 4px 24px rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.1)'
+                }}>
+                    <div style={{ width: 16, height: 16, border: '2px solid #6366f1', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                    <span style={{ color: '#fff', fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>
+                        Carregando rota...
+                    </span>
+                </div>
+            )}
 
-            <MapController locations={locations} selectedUserId={selectedUserId} />
+            {/* No Route Data Toast */}
+            {noRouteData && !loadingRoute && (
+                <div style={{
+                    position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
+                    zIndex: 1000, background: 'rgba(217,119,6,0.92)', backdropFilter: 'blur(8px)',
+                    borderRadius: 16, padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 10,
+                    boxShadow: '0 4px 24px rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)'
+                }}>
+                    <span style={{ fontSize: 16 }}>📍</span>
+                    <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>
+                        Sem dados de rota nas últimas 24h
+                    </span>
+                </div>
+            )}
 
-            {/* Pulse animation style */}
+            {/* Route Info Badge */}
+            {route.length > 0 && !loadingRoute && (
+                <div style={{
+                    position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
+                    zIndex: 1000, background: 'rgba(17,24,39,0.85)', backdropFilter: 'blur(8px)',
+                    borderRadius: 16, padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 10,
+                    boxShadow: '0 4px 24px rgba(0,0,0,0.25)', border: '1px solid rgba(99,102,241,0.3)',
+                    cursor: 'pointer'
+                }}
+                    onClick={() => { setRoute([]); setRouteUser(null); }}
+                >
+                    <div style={{ width: 24, height: 4, background: '#3b82f6', borderRadius: 2, borderTop: '2px dashed #3b82f6' }} />
+                    <span style={{ color: '#fff', fontSize: 12, fontWeight: 700, letterSpacing: 0.5 }}>
+                        Rota: {route.length} pontos GPS
+                    </span>
+                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>✕ fechar</span>
+                </div>
+            )}
+
             <style>{`
                 @keyframes ping {
                     75%, 100% { transform: scale(2); opacity: 0; }
                 }
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
             `}</style>
 
-            {/* Draw Route */}
-            {route.length > 0 && (
-                <>
-                    <Polyline
-                        positions={route}
-                        color="#3b82f6"
-                        weight={4}
-                        opacity={0.8}
-                        dashArray="12, 8"
-                    />
-                    {/* Start point - green */}
-                    <CircleMarker
-                        center={route[0]}
-                        radius={9}
-                        pathOptions={{ color: '#fff', fillColor: '#10b981', fillOpacity: 1, weight: 2 }}
-                    />
-                    {/* End point - blue */}
-                    {route.length > 1 && (
-                        <CircleMarker
-                            center={route[route.length - 1]}
-                            radius={9}
-                            pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1, weight: 2 }}
+            <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
+                <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+
+                <MapController locations={locations} selectedUserId={selectedUserId} />
+
+                {/* Draw Route */}
+                {route.length > 0 && (
+                    <>
+                        {/* Route shadow for depth */}
+                        <Polyline
+                            positions={route}
+                            color="#1e3a5f"
+                            weight={8}
+                            opacity={0.15}
                         />
-                    )}
-                </>
-            )}
+                        <Polyline
+                            positions={route}
+                            color="#3b82f6"
+                            weight={4}
+                            opacity={0.9}
+                            dashArray="12, 8"
+                        />
+                        {/* Start point - green */}
+                        <CircleMarker
+                            center={route[0]}
+                            radius={9}
+                            pathOptions={{ color: '#fff', fillColor: '#10b981', fillOpacity: 1, weight: 3 }}
+                        />
+                        {/* End point - blue */}
+                        {route.length > 1 && (
+                            <CircleMarker
+                                center={route[route.length - 1]}
+                                radius={9}
+                                pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1, weight: 3 }}
+                            />
+                        )}
+                    </>
+                )}
 
-            {locations.map((loc) => {
-                const status = normalizeStatus(loc.current_status)
-                const isSelected = selectedUserId === loc.user_id
-                const icon = createColoredIcon(getStatusColor(loc.current_status), isSelected)
+                {locations.map((loc) => {
+                    const isSelected = selectedUserId === loc.user_id
+                    const icon = createColoredIcon(getStatusColor(loc.current_status), isSelected)
 
-                return (
-                    <Marker
-                        key={loc.user_id}
-                        position={[loc.latitude, loc.longitude]}
-                        icon={icon}
-                        eventHandlers={{ click: () => handleMarkerClick(loc.user_id) }}
-                        zIndexOffset={isSelected ? 1000 : 0}
-                    >
-                        <Popup minWidth={220}>
-                            <div className="space-y-2 py-1">
-                                <div className="font-bold text-gray-900 text-base">{loc.full_name || 'Usuário'}</div>
-                                <div className="text-sm font-medium">{getStatusLabel(loc.current_status)}</div>
-                                <div className="text-xs text-gray-500">
-                                    📍 {loc.latitude?.toFixed(5)}, {loc.longitude?.toFixed(5)}
-                                </div>
-                                <div className="text-xs text-gray-400">
-                                    🕐 {formatTime(loc.timestamp)}
-                                </div>
-                                <div className="flex gap-2 pt-2">
-                                    <button
-                                        onClick={() => handleMarkerClick(loc.user_id)}
-                                        className="flex-1 bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-semibold hover:bg-blue-700 transition"
-                                    >
-                                        {loadingRoute && routeUser === loc.user_id
-                                            ? '⏳ Carregando...'
-                                            : routeUser === loc.user_id && route.length > 0
-                                                ? `📍 ${route.length} pontos`
-                                                : '🗺️ Ver Rota'}
-                                    </button>
-                                    {onViewDetails && (
+                    return (
+                        <Marker
+                            key={loc.user_id}
+                            position={[loc.latitude, loc.longitude]}
+                            icon={icon}
+                            eventHandlers={{ click: () => handleMarkerClick(loc.user_id) }}
+                            zIndexOffset={isSelected ? 1000 : 0}
+                        >
+                            <Popup minWidth={220}>
+                                <div style={{ padding: '4px 0', fontFamily: 'system-ui, sans-serif' }}>
+                                    <div style={{ fontWeight: 800, color: '#111827', fontSize: 15, marginBottom: 4 }}>
+                                        {loc.full_name || 'Usuário'}
+                                    </div>
+                                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                                        {getStatusLabel(loc.current_status)}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
+                                        📍 {loc.latitude?.toFixed(5)}, {loc.longitude?.toFixed(5)}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 10 }}>
+                                        🕐 {formatTime(loc.timestamp)}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8 }}>
                                         <button
-                                            onClick={() => onViewDetails(loc)}
-                                            className="flex-1 bg-indigo-600 text-white px-3 py-1.5 rounded text-xs font-semibold hover:bg-indigo-700 transition"
+                                            onClick={() => handleMarkerClick(loc.user_id)}
+                                            style={{
+                                                flex: 1, background: loadingRoute && routeUser === loc.user_id ? '#94a3b8' : '#3b82f6',
+                                                color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0',
+                                                fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.3
+                                            }}
                                         >
-                                            👤 Detalhes
+                                            {loadingRoute && routeUser === loc.user_id
+                                                ? '⏳ Carregando...'
+                                                : routeUser === loc.user_id && route.length > 0
+                                                    ? `📍 ${route.length} pontos`
+                                                    : '🗺️ Ver Rota'}
                                         </button>
-                                    )}
+                                        {onViewDetails && (
+                                            <button
+                                                onClick={() => onViewDetails(loc)}
+                                                style={{
+                                                    flex: 1, background: '#4f46e5', color: '#fff',
+                                                    border: 'none', borderRadius: 8, padding: '8px 0',
+                                                    fontSize: 11, fontWeight: 700, cursor: 'pointer'
+                                                }}
+                                            >
+                                                👤 Detalhes
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        </Popup>
-                    </Marker>
-                )
-            })}
-        </MapContainer>
+                            </Popup>
+                        </Marker>
+                    )
+                })}
+            </MapContainer>
+        </div>
     )
 }
