@@ -178,11 +178,17 @@ export async function PUT(request: Request) {
 
         if (!id) return NextResponse.json({ error: 'User ID required' }, { status: 400 })
 
+        // 0. Get Old Data for Audit
+        const { data: oldData } = await supabaseAdmin
+            .from('profiles')
+            .select('*')
+            .eq('id', id)
+            .single()
+
         // 1. Update Profile Logic
         const updates: any = {}
         if (name) updates.full_name = name
         if (role) updates.role = role
-        // Legacy field update
         if (shiftId) updates.shift_rule_id = shiftId !== 'none' ? shiftId : null
 
         if (Object.keys(updates).length > 0) {
@@ -190,41 +196,38 @@ export async function PUT(request: Request) {
                 .from('profiles')
                 .update(updates)
                 .eq('id', id)
-                .eq('company_id', requester.company_id) // Ensure same company
+                .eq('company_id', requester.company_id)
 
             if (updateError) throw updateError
         }
 
         // 2. Update Employee Shifts
-        // If shiftIds is provided, we do a full replace
         if (shiftIds && Array.isArray(shiftIds)) {
-            // Delete existing
             await supabaseAdmin.from('employee_shifts').delete().eq('user_id', id)
-
-            // Insert new
             const newShifts = shiftIds.filter((sid: string) => sid !== 'none')
             if (newShifts.length > 0) {
-                const inserts = newShifts.map((sid: string) => ({
-                    user_id: id,
-                    shift_id: sid
-                }))
-                // Use upsert to be safe, or just insert
+                const inserts = newShifts.map((sid: string) => ({ user_id: id, shift_id: sid }))
                 const { error: insError } = await supabaseAdmin.from('employee_shifts').insert(inserts)
-                if (insError) {
-                    console.error('Error inserting shifts:', insError)
-                    throw insError
-                }
+                if (insError) throw insError
             }
-        }
-        // Legacy: if only shiftId provided (old UI), sync it
-        else if (shiftId) {
-            // Only update if shiftIds was NOT provided (to avoid double update if both are sent)
+        } else if (shiftId) {
             await supabaseAdmin.from('employee_shifts').delete().eq('user_id', id)
             if (shiftId !== 'none') {
                 const { error: insError } = await supabaseAdmin.from('employee_shifts').insert({ user_id: id, shift_id: shiftId })
                 if (insError) throw insError
             }
         }
+
+        // 3. Log Audit
+        await logAudit({
+            userId: user.id,
+            action: 'UPDATE_EMPLOYEE',
+            tableName: 'profiles',
+            recordId: id,
+            oldData,
+            newData: { name, role, email, shiftIds },
+            ipAddress: request.headers.get('x-forwarded-for') || 'unknown'
+        })
 
         return NextResponse.json({ success: true, message: 'Employee updated' })
 

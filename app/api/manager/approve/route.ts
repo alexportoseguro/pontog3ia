@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { verifyAuth, checkAdminRole } from '@/lib/auth-server'
+import { logAudit } from '@/lib/audit'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -50,13 +51,17 @@ export async function POST(request: Request) {
         if (updateError) throw updateError
 
         // 3. Log Audit
-        await supabaseAdmin.from('audit_logs').insert({
-            user_id: item.user_id,
+        await logAudit({
+            userId: auth.user?.id || 'system',
             action: `JUSTIFICATION_${action.toUpperCase()}`,
+            tableName: 'justifications',
+            recordId: id,
             details: {
                 justification_id: id,
-                approver_id: auth.user?.id
-            }
+                approver_id: auth.user?.id,
+                status: action
+            },
+            ipAddress: request.headers.get('x-forwarded-for') || 'unknown'
         })
 
         return NextResponse.json({ success: true })

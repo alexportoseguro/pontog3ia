@@ -144,9 +144,14 @@ export default function AuditPage() {
                                     filteredLogs.map(log => (
                                         <tr key={log.id} className="hover:bg-slate-50/80 transition-colors group">
                                             <td className="p-5">
-                                                <div className="flex items-center gap-2 text-slate-500 font-medium text-xs">
-                                                    <ClockIcon className="h-4 w-4 text-slate-300" />
-                                                    {new Date(log.created_at).toLocaleString('pt-BR')}
+                                                <div className="flex flex-col gap-1 text-slate-500 font-medium text-xs">
+                                                    <div className="flex items-center gap-2">
+                                                        <ClockIcon className="h-4 w-4 text-slate-300" />
+                                                        {new Date(log.created_at).toLocaleDateString('pt-BR')}
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-400 ml-6">
+                                                        {new Date(log.created_at).toLocaleTimeString('pt-BR')}
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td className="p-5">
@@ -155,8 +160,8 @@ export default function AuditPage() {
                                                         {log.user?.full_name?.charAt(0) || '?'}
                                                     </div>
                                                     <div>
-                                                        <p className="text-sm font-bold text-slate-700">{log.user?.full_name || 'Sistema / Desconhecido'}</p>
-                                                        <p className="text-[10px] text-slate-400 font-medium">{log.user?.email}</p>
+                                                        <p className="text-sm font-bold text-slate-700">{log.user?.full_name || 'Sistema'}</p>
+                                                        <p className="text-[10px] text-slate-400 font-medium">{log.user?.email || '---'}</p>
                                                     </div>
                                                 </div>
                                             </td>
@@ -166,12 +171,32 @@ export default function AuditPage() {
                                                 </span>
                                             </td>
                                             <td className="p-5">
-                                                <code className="text-[10px] text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200 font-mono max-w-xs block truncate group-hover:whitespace-normal group-hover:max-w-none transition-all">
-                                                    {JSON.stringify(log.details)}
-                                                </code>
+                                                <div className="flex flex-col gap-2 max-w-md">
+                                                    {log.details && Object.keys(log.details).length > 0 && (
+                                                        <div className="text-[10px] text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 font-mono overflow-auto max-h-32">
+                                                            <pre>{JSON.stringify(log.details, null, 2)}</pre>
+                                                        </div>
+                                                    )}
+                                                    {(log as any).old_data || (log as any).new_data ? (
+                                                        <div className="flex gap-2 text-[9px] font-mono">
+                                                            {(log as any).old_data && (
+                                                                <div className="flex-1 bg-red-50/50 p-1 rounded border border-red-100 truncate">
+                                                                    <span className="text-red-600 font-bold uppercase block mb-1">Old Data</span>
+                                                                    {JSON.stringify((log as any).old_data)}
+                                                                </div>
+                                                            )}
+                                                            {(log as any).new_data && (
+                                                                <div className="flex-1 bg-emerald-50/50 p-1 rounded border border-emerald-100 truncate">
+                                                                    <span className="text-emerald-600 font-bold uppercase block mb-1">New Data</span>
+                                                                    {JSON.stringify((log as any).new_data)}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : null}
+                                                </div>
                                             </td>
                                             <td className="p-5 text-right">
-                                                <span className="text-xs font-mono text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-100">
+                                                <span className="text-[10px] font-mono text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-100">
                                                     {log.ip_address || '---'}
                                                 </span>
                                             </td>

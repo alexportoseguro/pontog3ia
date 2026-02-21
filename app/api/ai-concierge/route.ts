@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { conciergeTools } from '@/lib/concierge-tools'
 import { verifyAuth } from '@/lib/auth-server'
+import { logAudit } from '@/lib/audit'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -18,6 +19,17 @@ export async function POST(request: Request) {
         const auth = await verifyAuth(request)
         if (auth.error) {
             return NextResponse.json({ error: auth.error }, { status: auth.status })
+        }
+
+        // Log Audit for Concierge Interaction
+        const bodyPreview = await request.clone().json().catch(() => ({}));
+        if (auth.user) {
+            await logAudit({
+                userId: auth.user.id,
+                action: 'CONCIERGE_PROMPT',
+                details: { message: bodyPreview.message?.substring(0, 500) },
+                ipAddress: request.headers.get('x-forwarded-for') || 'unknown'
+            })
         }
 
         const contentType = request.headers.get('content-type') || '';

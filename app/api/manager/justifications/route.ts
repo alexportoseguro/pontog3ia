@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { checkAdminRole, supabaseAdmin } from '@/lib/auth-server'
+import { logAudit } from '@/lib/audit'
 
 export async function POST(request: Request) {
     try {
@@ -45,15 +46,18 @@ export async function POST(request: Request) {
         if (error) throw error
 
         // 3. Log Audit
-        await supabaseAdmin.from('audit_logs').insert({
-            user_id: auth.user?.id, // Manager performed logic
+        await logAudit({
+            userId: auth.user?.id || 'system',
             action: 'CREATE_JUSTIFICATION',
+            tableName: 'justifications',
+            recordId: data.id,
             details: {
                 target_user_id: userId,
                 justification_id: data.id,
                 type,
                 range: `${startDate} to ${endDate}`
-            }
+            },
+            ipAddress: request.headers.get('x-forwarded-for') || 'unknown'
         })
 
         return NextResponse.json({ success: true, data })

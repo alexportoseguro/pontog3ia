@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { verifyAuth, checkAdminRole, supabaseAdmin } from '@/lib/auth-server'
+import { logAudit } from '@/lib/audit'
 
 export async function GET(request: Request) {
     try {
@@ -155,11 +156,14 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: result.error }, { status: 500 })
         }
 
-        // Audit & Notification ... (Keep original logic but use result.userId)
-        await supabaseAdmin.from('audit_logs').insert({
-            user_id: result.userId,
+        // Audit & Notification
+        await logAudit({
+            userId: approverId,
             action: `${type.toUpperCase()}_${action.toUpperCase()}`,
-            details: { id, type, approved_by: approverId, rejection_reason: rejectionReason }
+            tableName: type === 'justification' ? 'justifications' : type === 'time_off' ? 'time_off_requests' : 'time_events',
+            recordId: id,
+            details: { id, type, approved_by: approverId, rejection_reason: rejectionReason },
+            ipAddress: request.headers.get('x-forwarded-for') || 'unknown'
         })
 
         const typeLabels: Record<string, string> = {
