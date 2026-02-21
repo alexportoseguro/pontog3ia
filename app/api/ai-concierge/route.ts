@@ -159,25 +159,40 @@ COMPORTAMENTO:
         let finalResponse = '';
         let transcription = message;
 
-        while (response.functionCalls && response.functionCalls().length > 0) {
-            const functionCall = response.functionCalls()[0];
-            console.log(`[AI] Calling tool: ${functionCall.name}`, functionCall.args);
+        while (response.functionCalls && (response.functionCalls()?.length || 0) > 0) {
+            const calls = response.functionCalls();
+            if (!calls || calls.length === 0) break;
+            console.log(`[AI] Processing ${calls.length} parallel tool calls...`);
 
-            toolCalls.push({
-                name: functionCall.name,
-                args: functionCall.args
-            });
+            // Execute all tools in parallel
+            const functionResponses = await Promise.all(calls.map(async (call: any) => {
+                console.log(`[AI] Calling tool: ${call.name}`, call.args);
 
-            // Execute the tool
-            const toolResponse = await executeToolServer(functionCall.name, functionCall.args, requesterId, auth.companyId);
+                toolCalls.push({
+                    name: call.name,
+                    args: call.args
+                });
 
-            // Send the tool response back to the model
-            result = await chat.sendMessage([{
-                functionResponse: {
-                    name: functionCall.name,
-                    response: toolResponse
+                try {
+                    const content = await executeToolServer(call.name, call.args, requesterId, auth.companyId);
+
+                    return {
+                        name: call.name,
+                        response: content
+                    };
+                } catch (toolError: any) {
+                    console.error(`[AI] Tool execution error (${call.name}):`, toolError);
+                    return {
+                        name: call.name,
+                        response: { error: toolError.message || "Erro desconhecido na ferramenta" }
+                    };
                 }
-            }]);
+            }));
+
+            // Send all results back in a single turn
+            result = await chat.sendMessage(functionResponses.map(fr => ({
+                functionResponse: fr
+            })));
 
             response = result.response;
         }
@@ -411,7 +426,7 @@ async function getTeamStatus(args: any, companyId: string) {
     if (error) throw error;
 
     return {
-        team: members.map((m: any) => ({
+        team: (members || []).map((m: any) => ({
             name: m.full_name,
             role: m.role,
             status: m.current_status || 'offline',
