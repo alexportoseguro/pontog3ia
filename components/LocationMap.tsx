@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import MarkerClusterGroup from 'react-leaflet-cluster'
 
 // Fix for default marker icon
 // @ts-ignore
@@ -128,11 +129,13 @@ function MapController({ locations, selectedUserId }: { locations: any[], select
 interface LocationMapProps {
     locations: any[]
     selectedUserId?: string | null
+    routeDate?: string | null
+    geofences?: any[]
     onMarkerClick?: (userId: string) => void
     onViewDetails?: (loc: any) => void
 }
 
-export default function LocationMap({ locations, selectedUserId, onMarkerClick, onViewDetails }: LocationMapProps) {
+export default function LocationMap({ locations, selectedUserId, routeDate, geofences = [], onMarkerClick, onViewDetails }: LocationMapProps) {
     const [fullRouteData, setFullRouteData] = useState<any[]>([])
     const [route, setRoute] = useState<[number, number][]>([])
     const [routeUser, setRouteUser] = useState<string | null>(null)
@@ -144,7 +147,7 @@ export default function LocationMap({ locations, selectedUserId, onMarkerClick, 
         ? [locations[0].latitude, locations[0].longitude] as [number, number]
         : defaultCenter
 
-    const fetchRoute = useCallback(async (userId: string) => {
+    const fetchRoute = useCallback(async (userId: string, dateStr?: string | null) => {
         setLoadingRoute(true)
         setRouteUser(userId)
         setNoRouteData(false)
@@ -154,7 +157,13 @@ export default function LocationMap({ locations, selectedUserId, onMarkerClick, 
             if (session?.access_token) {
                 headers['Authorization'] = `Bearer ${session.access_token}`
             }
-            const res = await fetch(`/api/locations?userId=${userId}&history=true`, { headers })
+
+            let url = `/api/locations?userId=${userId}&history=true`
+            if (dateStr) {
+                url += `&date=${dateStr}`
+            }
+
+            const res = await fetch(url, { headers })
             if (res.ok) {
                 const data = await res.json()
                 if (Array.isArray(data) && data.length > 0) {
@@ -229,19 +238,19 @@ export default function LocationMap({ locations, selectedUserId, onMarkerClick, 
 
     async function handleMarkerClick(userId: string) {
         if (onMarkerClick) onMarkerClick(userId)
-        await fetchRoute(userId)
+        await fetchRoute(userId, routeDate)
     }
 
     useEffect(() => {
         if (selectedUserId) {
-            fetchRoute(selectedUserId)
+            fetchRoute(selectedUserId, routeDate)
         } else {
             setRoute([])
             setFullRouteData([])
             setRouteUser(null)
             setNoRouteData(false)
         }
-    }, [selectedUserId])
+    }, [selectedUserId, routeDate])
 
     return (
         <div style={{ position: 'relative', height: '100%', width: '100%' }}>
@@ -311,6 +320,39 @@ export default function LocationMap({ locations, selectedUserId, onMarkerClick, 
 
                 <MapController locations={locations} selectedUserId={selectedUserId} />
 
+                {/* Draw Geofences */}
+                {geofences.map(fence => {
+                    const center = [fence.latitude, fence.longitude] as [number, number];
+                    // Example: color based on type or status
+                    const color = fence.status === 'active' ? '#3b82f6' : '#94a3b8';
+                    return (
+                        <CircleMarker
+                            key={`geofence-${fence.id}`}
+                            center={center}
+                            radius={fence.radius > 0 ? fence.radius : 100} // Radius in meters
+                            pathOptions={{
+                                color: color,
+                                fillColor: color,
+                                fillOpacity: 0.15,
+                                weight: 2,
+                                dashArray: '5, 5'
+                            }}
+                        >
+                            <Popup>
+                                <div style={{ padding: '2px', fontFamily: 'system-ui, sans-serif' }}>
+                                    <div style={{ fontWeight: 800, color: '#1e293b', fontSize: 13 }}>{fence.name}</div>
+                                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                                        Raio: <strong>{fence.radius}m</strong>
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                                        Tipo: <strong>{fence.type === 'site' ? 'Obra/Local' : fence.type === 'office' ? 'Escritório' : 'Posto'}</strong>
+                                    </div>
+                                </div>
+                            </Popup>
+                        </CircleMarker>
+                    )
+                })}
+
                 {/* Draw Route */}
                 {route.length > 0 && (
                     <>
@@ -372,60 +414,88 @@ export default function LocationMap({ locations, selectedUserId, onMarkerClick, 
                     </>
                 )}
 
-                {locations.map((loc) => {
-                    const isSelected = selectedUserId === loc.user_id
-                    const icon = createColoredIcon(getStatusColor(loc.current_status), isSelected)
+                {/* Locations Cluster */}
+                <MarkerClusterGroup
+                    chunkedLoading
+                    maxClusterRadius={40}
+                    spiderfyOnMaxZoom={true}
+                    showCoverageOnHover={false}
+                >
+                    {locations.map((loc) => {
+                        const isSelected = selectedUserId === loc.user_id
+                        const icon = createColoredIcon(getStatusColor(loc.current_status), isSelected)
+                        const accuracy = loc.accuracy || 15 // Default to 15m if not provided
 
-                    return (
-                        <Marker
-                            key={loc.user_id}
-                            position={[loc.latitude, loc.longitude]}
-                            icon={icon}
-                            eventHandlers={{ click: () => handleMarkerClick(loc.user_id) }}
-                            zIndexOffset={isSelected ? 1000 : 0}
-                        >
-                            <Popup minWidth={220}>
-                                <div style={{ padding: '4px 0', fontFamily: 'system-ui, sans-serif' }}>
-                                    <div style={{ fontWeight: 800, color: '#111827', fontSize: 15, marginBottom: 4 }}>
-                                        {loc.full_name || 'Usuário'}
-                                    </div>
-                                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-                                        {getStatusLabel(loc.current_status)}
-                                    </div>
-                                    <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 10 }}>
-                                        🕐 Visto em: {formatTime(loc.timestamp)}
-                                    </div>
-                                    <div style={{ display: 'flex', gap: 8 }}>
-                                        <button
-                                            onClick={() => handleMarkerClick(loc.user_id)}
-                                            style={{
-                                                flex: 1, background: '#6366f1',
-                                                color: '#fff', border: 'none', borderRadius: 10, padding: '10px 0',
-                                                fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(99,102,241,0.2)'
-                                            }}
-                                        >
-                                            {loadingRoute && routeUser === loc.user_id
-                                                ? '⏳ Carregando...'
-                                                : '🗺️ Ver Rota Histórica'}
-                                        </button>
-                                        {onViewDetails && (
-                                            <button
-                                                onClick={() => onViewDetails(loc)}
-                                                style={{
-                                                    flex: 1, border: '1.5px solid #e2e8f0', color: '#475569',
-                                                    background: '#fff', borderRadius: 10, padding: '10px 0',
-                                                    fontSize: 11, fontWeight: 700, cursor: 'pointer'
-                                                }}
-                                            >
-                                                👤 Perfil
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </Popup>
-                        </Marker>
-                    )
-                })}
+                        return (
+                            <div key={`container-${loc.user_id}`}>
+                                {/* GPS Accuracy Circle */}
+                                {isSelected && (
+                                    <CircleMarker
+                                        center={[loc.latitude, loc.longitude]}
+                                        radius={accuracy} // Map radius in meters
+                                        pathOptions={{
+                                            color: '#6366f1',
+                                            fillColor: '#6366f1',
+                                            fillOpacity: 0.1,
+                                            weight: 1,
+                                            dashArray: '4, 4'
+                                        }}
+                                    />
+                                )}
+
+                                <Marker
+                                    key={loc.user_id}
+                                    position={[loc.latitude, loc.longitude]}
+                                    icon={icon}
+                                    eventHandlers={{ click: () => handleMarkerClick(loc.user_id) }}
+                                    zIndexOffset={isSelected ? 1000 : 0}
+                                >
+                                    <Popup minWidth={220}>
+                                        <div style={{ padding: '4px 0', fontFamily: 'system-ui, sans-serif' }}>
+                                            <div style={{ fontWeight: 800, color: '#111827', fontSize: 15, marginBottom: 4 }}>
+                                                {loc.full_name || 'Usuário'}
+                                            </div>
+                                            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                                                {getStatusLabel(loc.current_status)}
+                                            </div>
+                                            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 10 }}>
+                                                🕐 Visto em: {formatTime(loc.timestamp)}
+                                                <br />
+                                                🎯 Precisão: {Math.round(accuracy)}m
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 8 }}>
+                                                <button
+                                                    onClick={() => handleMarkerClick(loc.user_id)}
+                                                    style={{
+                                                        flex: 1, background: '#6366f1',
+                                                        color: '#fff', border: 'none', borderRadius: 10, padding: '10px 0',
+                                                        fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(99,102,241,0.2)'
+                                                    }}
+                                                >
+                                                    {loadingRoute && routeUser === loc.user_id
+                                                        ? '⏳ Carregando...'
+                                                        : '🗺️ Ver Rota'}
+                                                </button>
+                                                {onViewDetails && (
+                                                    <button
+                                                        onClick={() => onViewDetails(loc)}
+                                                        style={{
+                                                            flex: 1, border: '1.5px solid #e2e8f0', color: '#475569',
+                                                            background: '#fff', borderRadius: 10, padding: '10px 0',
+                                                            fontSize: 11, fontWeight: 700, cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        👤 Perfil
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </Popup>
+                                </Marker>
+                            </div>
+                        )
+                    })}
+                </MarkerClusterGroup>
             </MapContainer>
         </div>
     )

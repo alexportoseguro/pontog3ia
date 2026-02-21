@@ -51,6 +51,29 @@ export default function MapPage() {
     const [drawerEmployee, setDrawerEmployee] = useState<EmployeeDetail | null>(null)
     const [isDrawerOpen, setIsDrawerOpen] = useState(false)
     const [loadingDetails, setLoadingDetails] = useState(false)
+    const [routeDate, setRouteDate] = useState<string>(() => new Date().toISOString().split('T')[0])
+    const [geofences, setGeofences] = useState<any[]>([])
+
+    // Fetch geofences once
+    async function fetchGeofences() {
+        try {
+            const { data: { session } } = await supabase.auth.getSession()
+            const headers: any = {}
+            if (session?.access_token) {
+                headers['Authorization'] = `Bearer ${session.access_token}`
+            }
+
+            const res = await fetch('/api/geofences', { headers })
+            if (res.ok) {
+                const data = await res.json()
+                if (Array.isArray(data)) {
+                    setGeofences(data)
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch geofences', error)
+        }
+    }
 
     async function fetchLocations() {
         setIsRefreshing(true)
@@ -162,8 +185,87 @@ export default function MapPage() {
 
     useEffect(() => {
         fetchLocations()
-        const interval = setInterval(fetchLocations, 30000)
-        return () => clearInterval(interval)
+        fetchGeofences()
+
+        // Set up Realtime subscriptions
+        const channel = supabase.channel('map-updates')
+
+        // Listen for new location logs
+        channel.on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'location_logs'
+            },
+            async (payload) => {
+                const newLoc = payload.new
+
+                // Fetch profile data for the new location to get status/role
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('full_name, role, current_status')
+                    .eq('id', newLoc.user_id)
+                    .single()
+
+                setLocations((current: any[]) => {
+                    const exists = current.findIndex(l => l.user_id === newLoc.user_id)
+                    const enhancedLoc = {
+                        ...newLoc,
+                        full_name: profile?.full_name || 'Usuário',
+                        role: profile?.role || 'employee',
+                        current_status: profile?.current_status || 'offline'
+                    }
+
+                    if (exists >= 0) {
+                        const newArray = [...current]
+                        // Only update if the new location is more recent
+                        if (new Date((enhancedLoc as any).timestamp) > new Date((newArray[exists] as any).timestamp)) {
+                            newArray[exists] = enhancedLoc
+                        }
+                        return newArray
+                    }
+                    return [...current, enhancedLoc]
+                })
+                setLastUpdate(new Date())
+            }
+        )
+
+        // Listen for profile status changes
+        channel.on(
+            'postgres_changes',
+            {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'profiles'
+            },
+            (payload) => {
+                const updatedProfile = payload.new as any
+                setLocations((current: any[]) => {
+                    const exists = current.findIndex(l => l.user_id === updatedProfile.id)
+                    if (exists >= 0) {
+                        const newArray = [...current]
+                        newArray[exists] = {
+                            ...(newArray[exists] as any),
+                            full_name: updatedProfile.full_name,
+                            role: updatedProfile.role,
+                            current_status: updatedProfile.current_status
+                        }
+                        return newArray
+                    }
+                    return current
+                })
+            }
+        )
+
+        channel.subscribe((status) => {
+            console.log('Realtime Map Status:', status)
+        })
+
+        // Cleanup
+        return () => {
+            supabase.removeChannel(channel)
+        }
     }, [])
 
     // Apply filters — normalize status to lowercase for comparison
@@ -385,6 +487,8 @@ export default function MapPage() {
                         <LocationMap
                             locations={filteredLocations}
                             selectedUserId={selectedEmployee}
+                            routeDate={routeDate}
+                            geofences={geofences}
                             onMarkerClick={(userId) => setSelectedEmployee(userId)}
                             onViewDetails={(loc) => openDetails(loc)}
                         />
@@ -492,12 +596,25 @@ export default function MapPage() {
                                                 Atualizado {formatTimeAgo(drawerEmployee.timestamp)}
                                             </p>
                                         </div>
-                                        <button
-                                            onClick={() => viewOnMap(drawerEmployee.user_id)}
-                                            className="mt-3 w-full py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors"
-                                        >
-                                            🗺️ Ver no Mapa / Rota
-                                        </button>
+
+                                        <div className="mt-4 pt-4 border-t border-indigo-200/50">
+                                            <label className="text-[10px] items-center font-black text-indigo-400 uppercase tracking-widest mb-2 block">
+                                                Data da Rota
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={routeDate}
+                                                onChange={(e) => setRouteDate(e.target.value)}
+                                                className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-2 text-xs font-bold text-indigo-900 outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all cursor-pointer mb-3"
+                                            />
+
+                                            <button
+                                                onClick={() => viewOnMap(drawerEmployee.user_id)}
+                                                className="w-full py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors"
+                                            >
+                                                🗺️ Ver no Mapa / Rota
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Today's Events Timeline */}

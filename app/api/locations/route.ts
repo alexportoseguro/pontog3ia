@@ -1,6 +1,50 @@
 import { NextResponse } from 'next/server'
 import { checkAdminRole, supabaseAdmin } from '@/lib/auth-server'
 
+// Helper for route optimization (Douglas-Peucker)
+function simplifyPath(points: any[], tolerance: number): any[] {
+    if (points.length <= 2) return points;
+
+    let dmax = 0;
+    let index = 0;
+    const end = points.length - 1;
+
+    for (let i = 1; i < end; i++) {
+        const d = perpendicularDistance(points[i], points[0], points[end]);
+        if (d > dmax) {
+            index = i;
+            dmax = d;
+        }
+    }
+
+    if (dmax > tolerance) {
+        const recResults1 = simplifyPath(points.slice(0, index + 1), tolerance);
+        const recResults2 = simplifyPath(points.slice(index), tolerance);
+        return recResults1.slice(0, recResults1.length - 1).concat(recResults2);
+    } else {
+        return [points[0], points[end]];
+    }
+}
+
+function perpendicularDistance(point: any, lineStart: any, lineEnd: any): number {
+    const x = point.longitude;
+    const y = point.latitude;
+    const startX = lineStart.longitude;
+    const startY = lineStart.latitude;
+    const endX = lineEnd.longitude;
+    const endY = lineEnd.latitude;
+
+    const dx = endX - startX;
+    const dy = endY - startY;
+
+    // Normalise
+    const mag = Math.sqrt(dx * dx + dy * dy);
+    if (mag > 0) {
+        return Math.abs(dx * (startY - y) - (startX - x) * dy) / mag;
+    }
+    return 0;
+}
+
 export async function GET(request: Request) {
     try {
         const auth = await checkAdminRole()
@@ -10,6 +54,7 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url)
         const userId = searchParams.get('userId')
         const history = searchParams.get('history') === 'true'
+        const dateStr = searchParams.get('date')
 
         if (userId && history) {
             // Step 1: verify user belongs to admin's company
@@ -23,19 +68,41 @@ export async function GET(request: Request) {
                 return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
             }
 
-            // Step 2: get location history (last 24h)
+            // Step 2: get location history
+            // Default to last 24h, but if a date is provided, get that full day
+            let startTime, endTime
+
+            if (dateStr) {
+                // If a date string like '2023-10-25' is provided
+                const targetDate = new Date(dateStr)
+                startTime = new Date(targetDate.setHours(0, 0, 0, 0)).toISOString()
+                endTime = new Date(targetDate.setHours(23, 59, 59, 999)).toISOString()
+            } else {
+                // Default fallback: Last 24 hours
+                startTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+                endTime = new Date().toISOString()
+            }
+
             const { data, error } = await supabaseAdmin
                 .from('location_logs')
                 .select('id, latitude, longitude, timestamp, user_id')
                 .eq('user_id', userId)
-                .gte('timestamp', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+                .gte('timestamp', startTime)
+                .lte('timestamp', endTime)
                 .order('timestamp', { ascending: true })
 
             if (error) {
                 console.error('location_logs error:', error)
                 return NextResponse.json([]) // Return empty instead of crashing
             }
-            return NextResponse.json(data || [])
+
+            // Optimize points if there are too many
+            const points = data || [];
+            // Tolerance in degrees (roughly 5-10 meters depending on latitude)
+            // 0.00005 is a good starting point for street level tracking
+            const optimizedPoints = points.length > 50 ? simplifyPath(points, 0.00005) : points;
+
+            return NextResponse.json(optimizedPoints)
         }
 
         // Get latest location for each active user

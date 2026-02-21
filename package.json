@@ -28,6 +28,7 @@
     "react-dropzone": "^15.0.0",
     "react-hook-form": "^7.71.1",
     "react-leaflet": "^5.0.0",
+    "react-leaflet-cluster": "^4.0.0",
     "recharts": "^3.7.0"
   },
   "devDependencies": {
