@@ -2,7 +2,7 @@
 import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
 // Fix for default marker icon
@@ -13,6 +13,22 @@ const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
+
+// Helper to calculate distance between two points in meters
+function getDistance(p1: [number, number], p2: [number, number]) {
+    const R = 6371e3; // Earth radius in meters
+    const phi1 = p1[0] * Math.PI / 180;
+    const phi2 = p2[0] * Math.PI / 180;
+    const deltaPhi = (p2[0] - p1[0]) * Math.PI / 180;
+    const deltaLambda = (p2[1] - p1[1]) * Math.PI / 180;
+
+    const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+        Math.cos(phi1) * Math.cos(phi2) *
+        Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+}
 
 // Custom colored markers
 const createColoredIcon = (color: string, pulse = false) => new L.DivIcon({
@@ -31,6 +47,25 @@ const createColoredIcon = (color: string, pulse = false) => new L.DivIcon({
     iconSize: [44, 54],
     iconAnchor: [22, 54],
     popupAnchor: [0, -54],
+    className: ''
+})
+
+// Custom Stop Pin
+const createStopIcon = (durationStr: string) => new L.DivIcon({
+    html: `
+        <div style="position:relative;width:32px;height:32px;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,0.2);border:2px solid #6366f1;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <div style="position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:10px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.3);">
+                ${durationStr}
+            </div>
+        </div>
+    `,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -16],
     className: ''
 })
 
@@ -66,6 +101,13 @@ function formatTime(timestamp: string): string {
     })
 }
 
+function formatDuration(minutes: number): string {
+    if (minutes < 60) return `${Math.round(minutes)}m`;
+    const h = Math.floor(minutes / 60);
+    const m = Math.round(minutes % 60);
+    return `${h}h${m > 0 ? m + 'm' : ''}`;
+}
+
 // Component to keep map centered on selected user
 function MapController({ locations, selectedUserId }: { locations: any[], selectedUserId?: string | null }) {
     const map = useMap()
@@ -91,6 +133,7 @@ interface LocationMapProps {
 }
 
 export default function LocationMap({ locations, selectedUserId, onMarkerClick, onViewDetails }: LocationMapProps) {
+    const [fullRouteData, setFullRouteData] = useState<any[]>([])
     const [route, setRoute] = useState<[number, number][]>([])
     const [routeUser, setRouteUser] = useState<string | null>(null)
     const [loadingRoute, setLoadingRoute] = useState(false)
@@ -115,16 +158,17 @@ export default function LocationMap({ locations, selectedUserId, onMarkerClick, 
             if (res.ok) {
                 const data = await res.json()
                 if (Array.isArray(data) && data.length > 0) {
+                    setFullRouteData(data)
                     setRoute(data.map((p: any) => [p.latitude, p.longitude] as [number, number]))
                     setNoRouteData(false)
                 } else {
+                    setFullRouteData([])
                     setRoute([])
                     setNoRouteData(true)
-                    // Clear "no data" message after 4 seconds
                     setTimeout(() => setNoRouteData(false), 4000)
                 }
             } else {
-                console.warn('Route API error:', res.status)
+                setFullRouteData([])
                 setRoute([])
                 setNoRouteData(true)
                 setTimeout(() => setNoRouteData(false), 4000)
@@ -132,22 +176,68 @@ export default function LocationMap({ locations, selectedUserId, onMarkerClick, 
         } catch (e) {
             console.error('Error fetching route', e)
             setRoute([])
+            setFullRouteData([])
         } finally {
             setLoadingRoute(false)
         }
     }, [])
+
+    // Detecção de Paradas (>10min em um local de 30m)
+    const stops = useMemo(() => {
+        if (fullRouteData.length < 2) return [];
+
+        const detectedStops = [];
+        let currentStop: any = null;
+
+        for (let i = 0; i < fullRouteData.length - 1; i++) {
+            const p1 = fullRouteData[i];
+            const p2 = fullRouteData[i + 1];
+
+            const dist = getDistance([p1.latitude, p1.longitude], [p2.latitude, p2.longitude]);
+            const timeDiffMs = new Date(p2.timestamp).getTime() - new Date(p1.timestamp).getTime();
+            const timeDiffMin = timeDiffMs / 1000 / 60;
+
+            // Se a distância for curta (<35m), consideramos que está no mesmo lugar
+            if (dist < 35) {
+                if (!currentStop) {
+                    currentStop = {
+                        startP: p1,
+                        endP: p2,
+                        durationMin: timeDiffMin,
+                        latitude: p1.latitude,
+                        longitude: p1.longitude
+                    };
+                } else {
+                    currentStop.endP = p2;
+                    currentStop.durationMin += timeDiffMin;
+                }
+            } else {
+                // Se saiu do raio e o stop durou > 10 min, salva
+                if (currentStop && currentStop.durationMin >= 10) {
+                    detectedStops.push(currentStop);
+                }
+                currentStop = null;
+            }
+        }
+        // Final check
+        if (currentStop && currentStop.durationMin >= 10) {
+            detectedStops.push(currentStop);
+        }
+
+        return detectedStops;
+    }, [fullRouteData]);
 
     async function handleMarkerClick(userId: string) {
         if (onMarkerClick) onMarkerClick(userId)
         await fetchRoute(userId)
     }
 
-    // Auto-fetch route when selectedUserId changes
     useEffect(() => {
         if (selectedUserId) {
             fetchRoute(selectedUserId)
         } else {
             setRoute([])
+            setFullRouteData([])
             setRouteUser(null)
             setNoRouteData(false)
         }
@@ -194,13 +284,13 @@ export default function LocationMap({ locations, selectedUserId, onMarkerClick, 
                     boxShadow: '0 4px 24px rgba(0,0,0,0.25)', border: '1px solid rgba(99,102,241,0.3)',
                     cursor: 'pointer'
                 }}
-                    onClick={() => { setRoute([]); setRouteUser(null); }}
+                    onClick={() => { setRoute([]); setRouteUser(null); setFullRouteData([]); }}
                 >
-                    <div style={{ width: 24, height: 4, background: '#3b82f6', borderRadius: 2, borderTop: '2px dashed #3b82f6' }} />
+                    <div style={{ width: 24, height: 4, background: '#6366f1', borderRadius: 2, borderTop: '2px solid #6366f1' }} />
                     <span style={{ color: '#fff', fontSize: 12, fontWeight: 700, letterSpacing: 0.5 }}>
-                        Rota: {route.length} pontos GPS
+                        Rota: {route.length} pontos • {stops.length} paradas
                     </span>
-                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>✕ fechar</span>
+                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginLeft: 10 }}>✕ fechar</span>
                 </div>
             )}
 
@@ -224,32 +314,59 @@ export default function LocationMap({ locations, selectedUserId, onMarkerClick, 
                 {/* Draw Route */}
                 {route.length > 0 && (
                     <>
-                        {/* Route shadow for depth */}
+                        {/* Shadow Path */}
                         <Polyline
                             positions={route}
-                            color="#1e3a5f"
-                            weight={8}
-                            opacity={0.15}
+                            pathOptions={{ color: '#000', weight: 8, opacity: 0.1, lineJoin: 'round' }}
+                            smoothFactor={2}
                         />
+                        {/* Main Path */}
                         <Polyline
                             positions={route}
-                            color="#3b82f6"
-                            weight={4}
-                            opacity={0.9}
-                            dashArray="12, 8"
+                            pathOptions={{
+                                color: '#6366f1',
+                                weight: 4,
+                                opacity: 0.8,
+                                lineJoin: 'round',
+                                lineCap: 'round'
+                            }}
+                            smoothFactor={1.5}
                         />
-                        {/* Start point - green */}
+
+                        {/* Stop Markers */}
+                        {stops.map((stop, idx) => (
+                            <Marker
+                                key={`stop-${idx}`}
+                                position={[stop.latitude, stop.longitude]}
+                                icon={createStopIcon(formatDuration(stop.durationMin))}
+                            >
+                                <Popup>
+                                    <div style={{ padding: '2px', fontFamily: 'system-ui, sans-serif' }}>
+                                        <div style={{ fontWeight: 800, color: '#6366f1', fontSize: 13 }}>⏱️ Local de Parada</div>
+                                        <div style={{ fontSize: 12, marginTop: 4 }}>
+                                            Permanência: <strong>{formatDuration(stop.durationMin)}</strong>
+                                        </div>
+                                        <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
+                                            {new Date(stop.startP.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -
+                                            {new Date(stop.endP.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </div>
+                                    </div>
+                                </Popup>
+                            </Marker>
+                        ))}
+
+                        {/* Start point - green dot */}
                         <CircleMarker
                             center={route[0]}
-                            radius={9}
+                            radius={8}
                             pathOptions={{ color: '#fff', fillColor: '#10b981', fillOpacity: 1, weight: 3 }}
                         />
-                        {/* End point - blue */}
+                        {/* End point - blue dot */}
                         {route.length > 1 && (
                             <CircleMarker
                                 center={route[route.length - 1]}
-                                radius={9}
-                                pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1, weight: 3 }}
+                                radius={8}
+                                pathOptions={{ color: '#fff', fillColor: '#6366f1', fillOpacity: 1, weight: 3 }}
                             />
                         )}
                     </>
@@ -275,37 +392,32 @@ export default function LocationMap({ locations, selectedUserId, onMarkerClick, 
                                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
                                         {getStatusLabel(loc.current_status)}
                                     </div>
-                                    <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
-                                        📍 {loc.latitude?.toFixed(5)}, {loc.longitude?.toFixed(5)}
-                                    </div>
-                                    <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 10 }}>
-                                        🕐 {formatTime(loc.timestamp)}
+                                    <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 10 }}>
+                                        🕐 Visto em: {formatTime(loc.timestamp)}
                                     </div>
                                     <div style={{ display: 'flex', gap: 8 }}>
                                         <button
                                             onClick={() => handleMarkerClick(loc.user_id)}
                                             style={{
-                                                flex: 1, background: loadingRoute && routeUser === loc.user_id ? '#94a3b8' : '#3b82f6',
-                                                color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0',
-                                                fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.3
+                                                flex: 1, background: '#6366f1',
+                                                color: '#fff', border: 'none', borderRadius: 10, padding: '10px 0',
+                                                fontSize: 11, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(99,102,241,0.2)'
                                             }}
                                         >
                                             {loadingRoute && routeUser === loc.user_id
                                                 ? '⏳ Carregando...'
-                                                : routeUser === loc.user_id && route.length > 0
-                                                    ? `📍 ${route.length} pontos`
-                                                    : '🗺️ Ver Rota'}
+                                                : '🗺️ Ver Rota Histórica'}
                                         </button>
                                         {onViewDetails && (
                                             <button
                                                 onClick={() => onViewDetails(loc)}
                                                 style={{
-                                                    flex: 1, background: '#4f46e5', color: '#fff',
-                                                    border: 'none', borderRadius: 8, padding: '8px 0',
+                                                    flex: 1, border: '1.5px solid #e2e8f0', color: '#475569',
+                                                    background: '#fff', borderRadius: 10, padding: '10px 0',
                                                     fontSize: 11, fontWeight: 700, cursor: 'pointer'
                                                 }}
                                             >
-                                                👤 Detalhes
+                                                👤 Perfil
                                             </button>
                                         )}
                                     </div>
