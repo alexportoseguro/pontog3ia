@@ -31,11 +31,13 @@ export default function ReportsPage() {
     const [loading, setLoading] = useState(true)
     const [startDate, setStartDate] = useState(() => {
         const d = new Date()
-        d.setDate(d.getDate() - 30)
-        return d.toISOString().split('T')[0]
+        return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0]
     })
     const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0])
-    const [quickFilter, setQuickFilter] = useState('30days')
+    const [quickFilter, setQuickFilter] = useState('thisMonth')
+    const [selectedShiftFilter, setSelectedShiftFilter] = useState<string>('all')
+    const [onlyIssues, setOnlyIssues] = useState(false)
+    const [availableShifts, setAvailableShifts] = useState<any[]>([])
 
     // Pagination State
     const [page, setPage] = useState(1)
@@ -74,7 +76,26 @@ export default function ReportsPage() {
 
     useEffect(() => {
         fetchReport()
-    }, [startDate, endDate, page, selectedEmployeeFilter])
+    }, [startDate, endDate, page, selectedEmployeeFilter, selectedShiftFilter, onlyIssues])
+
+    useEffect(() => {
+        if (role === 'admin' || role === 'manager') {
+            fetchShifts()
+        }
+    }, [role])
+
+    async function fetchShifts() {
+        try {
+            const { data: { session } } = await supabase.auth.getSession()
+            const response = await fetch('/api/shifts', {
+                headers: { 'Authorization': `Bearer ${session?.access_token}` }
+            })
+            const data = await response.json()
+            if (!data.error) setAvailableShifts(data)
+        } catch (err) {
+            console.error('Error fetching shifts:', err)
+        }
+    }
 
     async function fetchReport() {
         setLoading(true)
@@ -88,6 +109,12 @@ export default function ReportsPage() {
             let url = `/api/reports?startDate=${startDate}&endDate=${endDate}&page=${page}&limit=${LIMIT}`
             if (selectedEmployeeFilter !== 'all') {
                 url += `&userId=${selectedEmployeeFilter}`
+            }
+            if (selectedShiftFilter !== 'all') {
+                url += `&shiftId=${selectedShiftFilter}`
+            }
+            if (onlyIssues) {
+                url += `&onlyIssues=true`
             }
 
             const response = await fetch(url, { headers })
@@ -172,21 +199,21 @@ export default function ReportsPage() {
 
     const getEventTypeLabel = (type: string) => {
         switch (type) {
-            case 'clock_in': return '🟢 Entrada'
-            case 'clock_out': return '🔴 Saída'
-            case 'break_start': return '☕ Início Pausa'
-            case 'break_end': return '🔙 Fim Pausa'
+            case 'clock_in': return 'Entrada'
+            case 'clock_out': return 'Saída'
+            case 'break_start': return 'Início Intervalo'
+            case 'break_end': return 'Fim Intervalo'
             default: return type
         }
     }
 
     const getJustificationLabel = (type: string) => {
         const map: any = {
-            'SICK_LEAVE': '🏥 Atestado',
-            'ABSENCE': '❌ Falta',
-            'VACATION': '🏖️ Férias',
-            'PERSONAL': '🙋 Pessoal',
-            'OTHER': '📝 Outro'
+            'SICK_LEAVE': 'Atestado Médico',
+            'ABSENCE': 'Falta Justificada',
+            'VACATION': 'Férias',
+            'PERSONAL': 'Assuntos Pessoais',
+            'OTHER': 'Outras Justificativas'
         }
         return map[type] || type
     }
@@ -575,23 +602,51 @@ export default function ReportsPage() {
                     )}
 
                     {role !== 'employee' && (
+                        <select
+                            value={selectedShiftFilter}
+                            onChange={(e) => setSelectedShiftFilter(e.target.value)}
+                            className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold text-slate-700 shadow-inner outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all min-w-[160px]"
+                        >
+                            <option value="all">Todos os Turnos</option>
+                            {availableShifts.map(shift => (
+                                <option key={shift.id} value={shift.id}>{shift.name}</option>
+                            ))}
+                        </select>
+                    )}
+
+                    {role !== 'employee' && (
+                        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 shadow-inner">
+                            <input
+                                type="checkbox"
+                                id="onlyIssues"
+                                checked={onlyIssues}
+                                onChange={(e) => setOnlyIssues(e.target.checked)}
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            />
+                            <label htmlFor="onlyIssues" className="text-sm font-bold text-slate-600 cursor-pointer">
+                                Apenas Inconsistências
+                            </label>
+                        </div>
+                    )}
+
+                    {role !== 'employee' && (
                         <div className="flex gap-2">
                             <div className="relative">
                                 <button
                                     onClick={() => setShowFiscalMenu(!showFiscalMenu)}
                                     className="inline-flex items-center gap-2 px-6 py-3 border border-slate-200 rounded-2xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 transition-all"
                                 >
-                                    🏛️ Fiscal ▾
+                                    Relatórios Fiscais
                                 </button>
                                 {showFiscalMenu && (
                                     <>
                                         <div className="fixed inset-0 z-40" onClick={() => setShowFiscalMenu(false)}></div>
                                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 z-50 animate-fade-in-up">
                                             <button onClick={() => { handleExportFiscal('afd'); setShowFiscalMenu(false) }} className="block w-full text-left px-4 py-3 text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 font-bold first:rounded-t-xl border-b border-slate-50 transition-colors">
-                                                📄 Exportar AFD
+                                                Exportar AFD
                                             </button>
                                             <button onClick={() => { handleExportFiscal('aej'); setShowFiscalMenu(false) }} className="block w-full text-left px-4 py-3 text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 font-bold last:rounded-b-xl transition-colors">
-                                                📑 Exportar AEJ
+                                                Exportar AEJ
                                             </button>
                                         </div>
                                     </>
@@ -608,13 +663,13 @@ export default function ReportsPage() {
                                 onClick={exportToExcel}
                                 className="inline-flex items-center px-6 py-3 border border-slate-200 rounded-2xl shadow-sm text-sm font-bold text-indigo-600 bg-white hover:bg-indigo-50 hover:border-indigo-200 transition-all"
                             >
-                                📊 Excel
+                                Excel
                             </button>
                             <button
                                 onClick={exportToPDF}
                                 className="inline-flex items-center px-6 py-3 bg-rose-600 rounded-2xl shadow-lg shadow-rose-500/20 text-sm font-bold text-white hover:bg-rose-700 transform hover:scale-[1.02] active:scale-[0.98] transition-all"
                             >
-                                📄 PDF
+                                PDF
                             </button>
                         </div>
                     )}
@@ -632,13 +687,13 @@ export default function ReportsPage() {
                         color={summary.totalBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}
                         isBalance
                     />
-                    <div className="premium-card p-6 bg-indigo-600 text-white flex flex-col justify-center">
-                        <p className="text-[10px] font-black uppercase tracking-widest opacity-70">Ações Rápidas</p>
+                    <div className="premium-card p-6 bg-slate-900 text-white flex flex-col justify-center rounded-3xl">
+                        <p className="text-[10px] font-black uppercase tracking-widest opacity-70">Gestão</p>
                         <button
                             onClick={() => alert('Em breve: Enviar lembrete para equipe')}
-                            className="mt-2 text-sm font-bold bg-white/20 hover:bg-white/30 p-2 rounded-xl transition-all"
+                            className="mt-2 text-sm font-bold bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl transition-all"
                         >
-                            Enviar Lembretes ⚡
+                            Notificar Equipe
                         </button>
                     </div>
                 </div>
@@ -843,10 +898,10 @@ export default function ReportsPage() {
                                                 <div>
                                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo</label>
                                                     <select value={manualEntry.type} onChange={(e) => setManualEntry({ ...manualEntry, type: e.target.value })} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 w-full outline-none focus:ring-2 focus:ring-indigo-500/20">
-                                                        <option value="clock_in">🟢 Entrada</option>
-                                                        <option value="break_start">☕ Início Pausa</option>
-                                                        <option value="break_end">🔙 Fim Pausa</option>
-                                                        <option value="clock_out">🔴 Saída</option>
+                                                        <option value="clock_in">Entrada</option>
+                                                        <option value="break_start">Início Pausa</option>
+                                                        <option value="break_end">Fim Pausa</option>
+                                                        <option value="clock_out">Saída</option>
                                                     </select>
                                                 </div>
                                             </div>
@@ -889,11 +944,11 @@ export default function ReportsPage() {
                                                 onChange={(e) => setAbsenceForm({ ...absenceForm, type: e.target.value })}
                                                 className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 w-full outline-none focus:ring-2 focus:ring-rose-500/20"
                                             >
-                                                <option value="SICK_LEAVE">🏥 Atestado Médico / Doença</option>
-                                                <option value="ABSENCE">❌ Falta Injustificada</option>
-                                                <option value="VACATION">🏖️ Férias</option>
-                                                <option value="PERSONAL">🙋 Motivos Pessoais</option>
-                                                <option value="OTHER">📝 Outro</option>
+                                                <option value="SICK_LEAVE">Atestado Médico / Doença</option>
+                                                <option value="ABSENCE">Falta Injustificada</option>
+                                                <option value="VACATION">Férias</option>
+                                                <option value="PERSONAL">Motivos Pessoais</option>
+                                                <option value="OTHER">Outro</option>
                                             </select>
                                         </div>
 
@@ -927,12 +982,16 @@ export default function ReportsPage() {
 
 function SummaryCard({ title, value, color, isBalance }: any) {
     return (
-        <div className="premium-card p-6 flex flex-col justify-between hover:scale-[1.02] transition-transform bg-white">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{title}</p>
-            <div className="flex items-baseline gap-2 mt-2">
-                <h4 className={`text-3xl font-black tracking-tight ${color}`}>{value}</h4>
-                {isBalance && <span className="text-[10px] font-bold text-slate-400">Total</span>}
+        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between transition-all hover:shadow-md hover:border-indigo-100 group">
+            <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 group-hover:text-indigo-400 transition-colors">{title}</p>
+                <p className={`text-2xl font-black ${color}`}>{value}</p>
             </div>
+            {isBalance && (
+                <div className="mt-4 h-1.5 w-full bg-slate-50 rounded-full overflow-hidden">
+                    <div className={`h-full transition-all duration-700 ${value.includes('-') ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: '100%' }}></div>
+                </div>
+            )}
         </div>
     )
 }
