@@ -148,6 +148,14 @@ export default function ReportsPage() {
         let start = new Date()
 
         switch (filter) {
+            case 'today':
+                start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+                break
+            case 'yesterday':
+                start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
+                const yEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
+                setEndDate(yEnd.toISOString().split('T')[0])
+                break
             case '7days':
                 start.setDate(today.getDate() - 7)
                 break
@@ -162,10 +170,13 @@ export default function ReportsPage() {
                 const end = new Date(today.getFullYear(), today.getMonth(), 0)
                 setEndDate(end.toISOString().split('T')[0])
                 break
+            case 'thisYear':
+                start = new Date(today.getFullYear(), 0, 1)
+                break
         }
 
         setStartDate(start.toISOString().split('T')[0])
-        if (filter !== 'lastMonth') {
+        if (filter !== 'lastMonth' && filter !== 'yesterday') {
             setEndDate(today.toISOString().split('T')[0])
         }
     }
@@ -560,15 +571,39 @@ export default function ReportsPage() {
     return (
         <div className="space-y-8 animate-fade-in">
             <div className="glass-effect p-8 rounded-3xl flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 shadow-xl shadow-slate-200/50">
-                <div className="flex flex-col gap-1">
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-                        {role === 'employee' ? 'Meu Espelho de Ponto' : 'Relatório Detalhado'}
-                    </h1>
-                    <p className="text-slate-500 font-medium">
-                        {role === 'employee'
-                            ? 'Visualize seu histórico de jornada e saldo de horas.'
-                            : 'Gerencie e visualize os relatórios de ponto da equipe.'}
-                    </p>
+                <div className="flex flex-col gap-4 flex-1">
+                    <div className="flex flex-col gap-1">
+                        <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+                            {role === 'employee' ? 'Meu Espelho de Ponto' : 'Relatório Detalhado'}
+                        </h1>
+                        <p className="text-slate-500 font-medium">
+                            {role === 'employee'
+                                ? 'Visualize seu histórico de jornada e saldo de horas.'
+                                : 'Gerencie e visualize os relatórios de ponto da equipe.'}
+                        </p>
+                    </div>
+
+                    {/* Quick Filters UI */}
+                    <div className="flex flex-wrap gap-2">
+                        {[
+                            { id: 'today', label: 'Hoje' },
+                            { id: 'yesterday', label: 'Ontem' },
+                            { id: 'thisMonth', label: 'Este Mês' },
+                            { id: 'lastMonth', label: 'Mês Passado' },
+                            { id: 'thisYear', label: 'Este Ano' },
+                        ].map(f => (
+                            <button
+                                key={f.id}
+                                onClick={() => applyQuickFilter(f.id)}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${quickFilter === f.id
+                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                    }`}
+                            >
+                                {f.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="flex flex-wrap gap-4 items-center">

@@ -21,17 +21,21 @@ export default function FeedPage() {
     const [events, setEvents] = useState<EventLog[]>([])
     const [userId, setUserId] = useState<string | null>(null)
 
-    useEffect(() => {
-        const init = async () => {
-            const { data: { user } } = await supabase.auth.getUser()
-            if (user) {
-                setUserId(user.id)
-                fetchLogs(user.id)
-                setupRealtime(user.id)
-            }
-        }
-        init()
-    }, [])
+    async function fetchLogs(uid: string) {
+        // Fetch last 20 messages for THIS user only
+        const { data: messages } = await supabase
+            .from('employee_messages')
+            .select('id, created_at, content')
+            .eq('user_id', uid)
+            .order('created_at', { ascending: false })
+            .limit(20)
+
+        const combined = [
+            ...(messages || []).map(m => ({ ...m, type: 'CHAT' }))
+        ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) as EventLog[]
+
+        setEvents(combined)
+    }
 
     function setupRealtime(uid: string) {
         const channel = supabase
@@ -61,25 +65,17 @@ export default function FeedPage() {
         }
     }
 
-    async function fetchLogs(uid: string) {
-        // Fetch last 20 messages for THIS user only
-        const { data: messages } = await supabase
-            .from('employee_messages')
-            .select('id, created_at, content')
-            .eq('user_id', uid)
-            .order('created_at', { ascending: false })
-            .limit(20)
-
-        // For employees, we typically don't show system audit logs unless it's about them.
-        // For now, let's keep Audit Logs HIDDEN for Personal Feed to avoid noise/leaks,
-        // unless we filter audit_logs by target_user_id (which might vary).
-
-        const combined = [
-            ...(messages || []).map(m => ({ ...m, type: 'CHAT' }))
-        ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) as EventLog[]
-
-        setEvents(combined)
-    }
+    useEffect(() => {
+        const init = async () => {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+                setUserId(user.id)
+                fetchLogs(user.id)
+                setupRealtime(user.id)
+            }
+        }
+        init()
+    }, [])
 
     return (
         <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
@@ -100,8 +96,8 @@ export default function FeedPage() {
                                     <div className="relative flex items-start space-x-4">
                                         <div className="relative">
                                             <span className={`h-10 w-10 rounded-2xl flex items-center justify-center ring-8 ring-white shadow-lg transform transition-transform hover:scale-110 ${event.type === 'CHAT'
-                                                    ? 'bg-gradient-to-br from-indigo-500 to-indigo-600'
-                                                    : 'bg-gradient-to-br from-slate-400 to-slate-500'
+                                                ? 'bg-gradient-to-br from-indigo-500 to-indigo-600'
+                                                : 'bg-gradient-to-br from-slate-400 to-slate-500'
                                                 }`}>
                                                 {event.type === 'CHAT' ? (
                                                     <span className="text-white text-lg font-bold">💬</span>
