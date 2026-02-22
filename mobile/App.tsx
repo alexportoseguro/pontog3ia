@@ -14,6 +14,8 @@ import ChatScreen from './screens/ChatScreen';
 import JustificationModal from './components/JustificationModal';
 
 import { Theme } from './lib/Theme';
+import { Typography } from './lib/Typography';
+import { Card, Button, InputField } from './components/SharedUI';
 import BiometricAuthScreen from './screens/BiometricAuthScreen';
 import OfflineBanner from './components/OfflineBanner';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -363,37 +365,29 @@ function App() {
           </View>
 
           <View style={styles.formContainer}>
-            <View style={styles.inputWrapper}>
-              <Text style={styles.label}>Email Corporativo</Text>
-              <TextInput
-                style={styles.input}
-                value={textEmail}
-                onChangeText={setTextEmail}
-                placeholder="nome@empresa.com"
-                placeholderTextColor={Theme.colors.text.muted}
-                autoCapitalize="none"
-              />
-            </View>
+            <InputField
+              label="Email Corporativo"
+              value={textEmail}
+              onChangeText={setTextEmail}
+              placeholder="nome@empresa.com"
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
 
-            <View style={styles.inputWrapper}>
-              <Text style={styles.label}>Senha</Text>
-              <TextInput
-                style={styles.input}
-                value={textPassword}
-                onChangeText={setTextPassword}
-                placeholder="••••••••"
-                placeholderTextColor={Theme.colors.text.muted}
-                secureTextEntry
-              />
-            </View>
+            <InputField
+              label="Senha"
+              value={textPassword}
+              onChangeText={setTextPassword}
+              placeholder="••••••••"
+              secureTextEntry
+            />
 
-            <TouchableOpacity
-              style={[styles.primaryButton, loading && styles.buttonDisabled]}
+            <Button
+              title={loading ? "Verificando..." : "Entrar no Sistema"}
               onPress={handleLogin}
-              disabled={loading}
-            >
-              <Text style={styles.primaryButtonText}>{loading ? "Verificando..." : "Entrar no Sistema"}</Text>
-            </TouchableOpacity>
+              loading={loading}
+              style={{ marginTop: 10 }}
+            />
           </View>
         </View>
       ) : (
@@ -629,37 +623,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   formContainer: { gap: 20 },
-  inputWrapper: { gap: 8 },
-  label: {
-    color: Theme.colors.text.secondary,
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  input: {
-    backgroundColor: Theme.colors.auth.surface,
-    color: Theme.colors.text.inverse,
-    padding: 18,
-    borderRadius: Theme.borderRadius.lg,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: Theme.colors.auth.border,
-  },
-  primaryButton: {
-    backgroundColor: Theme.colors.primary,
-    padding: 18,
-    borderRadius: Theme.borderRadius.lg,
-    alignItems: 'center',
-    marginTop: 10,
-    ...Theme.shadows.medium,
-  },
-  buttonDisabled: { opacity: 0.5 },
-  primaryButtonText: {
-    color: Theme.colors.text.inverse,
-    fontSize: 16,
-    fontWeight: '800',
-  },
   // Dashboard Styles
   dashboardContainer: { flex: 1 },
   dashboardHeader: {

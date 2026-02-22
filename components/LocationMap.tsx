@@ -392,6 +392,28 @@ export default function LocationMap({ locations, selectedUserId, routeDate, geof
                                             {new Date(stop.startP.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -
                                             {new Date(stop.endP.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </div>
+                                        <div style={{ marginTop: 8 }}>
+                                            <a
+                                                href={`https://www.google.com/maps?q=${stop.latitude},${stop.longitude}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={{
+                                                    display: 'block',
+                                                    width: '100%',
+                                                    textAlign: 'center',
+                                                    background: '#6366f1',
+                                                    color: '#fff',
+                                                    textDecoration: 'none',
+                                                    borderRadius: '8px',
+                                                    padding: '6px 0',
+                                                    fontSize: '11px',
+                                                    fontWeight: 'bold',
+                                                    boxShadow: '0 2px 4px rgba(99,102,241,0.2)'
+                                                }}
+                                            >
+                                                🗺️ Abrir no Maps
+                                            </a>
+                                        </div>
                                     </div>
                                 </Popup>
                             </Marker>

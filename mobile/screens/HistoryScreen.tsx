@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-nativ
 import { supabase } from '../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { Theme } from '../lib/Theme';
+import { Typography } from '../lib/Typography';
 
 export default function HistoryScreen({ user }: { user: any }) {
     const [events, setEvents] = useState<any[]>([]);
@@ -47,12 +48,12 @@ export default function HistoryScreen({ user }: { user: any }) {
                     <Ionicons name={info.icon as any} size={22} color={info.color} />
                 </View>
                 <View style={styles.infoContainer}>
-                    <Text style={styles.typeText}>{info.label}</Text>
-                    <Text style={styles.dateText}>{date.toLocaleDateString('pt-BR')} às {date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</Text>
+                    <Text style={Typography.body}>{info.label}</Text>
+                    <Text style={Typography.bodySmall}>{date.toLocaleDateString('pt-BR')} às {date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</Text>
                 </View>
                 <View style={styles.statusBadge}>
                     <Ionicons name="location-outline" size={12} color={Theme.colors.text.muted} />
-                    <Text style={styles.locationText}>GPS</Text>
+                    <Text style={Typography.micro}>GPS</Text>
                 </View>
             </View>
         );
@@ -81,7 +82,7 @@ export default function HistoryScreen({ user }: { user: any }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
+        backgroundColor: Theme.colors.background,
     },
     listContent: {
         padding: 16,
@@ -94,22 +95,18 @@ const styles = StyleSheet.create({
     card: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: Theme.colors.surface,
         padding: 18,
-        borderRadius: 20,
+        borderRadius: Theme.borderRadius.xl,
         marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 2,
+        ...Theme.shadows.soft,
         borderWidth: 1,
-        borderColor: '#F1F5F9',
+        borderColor: Theme.colors.border,
     },
     iconContainer: {
         width: 48,
         height: 48,
-        borderRadius: 16,
+        borderRadius: Theme.borderRadius.lg,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 16,
@@ -117,38 +114,19 @@ const styles = StyleSheet.create({
     infoContainer: {
         flex: 1,
     },
-    typeText: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#1E293B',
-        letterSpacing: -0.4,
-    },
-    dateText: {
-        fontSize: 13,
-        color: '#64748B',
-        marginTop: 4,
-        fontWeight: '500',
-    },
     statusBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F1F5F9',
+        backgroundColor: Theme.colors.background,
         paddingHorizontal: 10,
         paddingVertical: 6,
-        borderRadius: 12,
+        borderRadius: Theme.borderRadius.md,
         gap: 4,
-    },
-    locationText: {
-        fontSize: 10,
-        fontWeight: '800',
-        color: '#94A3B8',
-        textTransform: 'uppercase',
     },
     emptyText: {
         textAlign: 'center',
-        color: '#94A3B8',
         marginTop: 80,
-        fontSize: 15,
-        fontWeight: '600',
+        ...Typography.body,
+        color: Theme.colors.text.muted,
     }
 });

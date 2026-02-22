@@ -45,9 +45,11 @@ export async function detectAnomalies(
 
         // 2. Geofence Anomaly
         if (location && location.includes(',')) {
-            const [latStr, lonStr] = location.split(',')
-            const lat = parseFloat(latStr)
-            const lon = parseFloat(lonStr)
+            // Mobile sends format: (longitude,latitude)
+            const cleanLocation = location.replace(/[()]/g, '');
+            const [lonStr, latStr] = cleanLocation.split(',');
+            const lat = parseFloat(latStr);
+            const lon = parseFloat(lonStr);
 
             if (!isNaN(lat) && !isNaN(lon)) {
                 // Fetch allowed location rules? 

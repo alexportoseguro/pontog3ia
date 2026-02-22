@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Modal, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { Theme } from '../lib/Theme';
+import { Typography } from '../lib/Typography';
+import { Card, Button, InputField } from './SharedUI';
 
 type Props = {
     visible: boolean;
@@ -43,10 +46,10 @@ export default function JustificationModal({ visible, onClose, userId }: Props) 
     return (
         <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
             <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-                <TouchableOpacity activeOpacity={1} onPress={() => { }} style={styles.container}>
-                    <Text style={styles.title}>Nova Justificativa</Text>
+                <Card style={styles.cardContainer}>
+                    <Text style={[Typography.h3, styles.title]}>Nova Justificativa</Text>
 
-                    <Text style={styles.label}>Tipo de Ocorrência:</Text>
+                    <Text style={Typography.label}>Tipo de Ocorrência:</Text>
                     <View style={styles.typeRow}>
                         {['late_arrival', 'absence', 'medical'].map((t) => (
                             <TouchableOpacity
@@ -61,25 +64,21 @@ export default function JustificationModal({ visible, onClose, userId }: Props) 
                         ))}
                     </View>
 
-                    <Text style={styles.label}>Descrição:</Text>
-                    <TextInput
-                        style={styles.input}
+                    <InputField
+                        label="Descrição:"
                         multiline
                         numberOfLines={4}
                         placeholder="Explique o motivo..."
                         value={description}
                         onChangeText={setDescription}
+                        style={styles.textArea}
                     />
 
                     <View style={styles.actions}>
-                        <TouchableOpacity onPress={onClose} style={styles.cancelButton} disabled={loading}>
-                            <Text style={styles.cancelText}>Cancelar</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={handleSubmit} style={styles.submitButton} disabled={loading}>
-                            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Enviar</Text>}
-                        </TouchableOpacity>
+                        <Button variant="ghost" title="Cancelar" onPress={onClose} disabled={loading} style={styles.cancelButton} />
+                        <Button variant="success" title="Enviar" onPress={handleSubmit} loading={loading} style={styles.submitButton} />
                     </View>
-                </TouchableOpacity>
+                </Card>
             </TouchableOpacity>
         </Modal>
     );
@@ -92,83 +91,58 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         padding: 20
     },
-    container: {
-        backgroundColor: '#fff',
-        borderRadius: 12,
+    cardContainer: {
         padding: 20,
-        elevation: 5
     },
     title: {
-        fontSize: 20,
-        fontWeight: 'bold',
         marginBottom: 20,
         textAlign: 'center',
-        color: '#1f2937'
-    },
-    label: {
-        fontSize: 14,
-        color: '#4b5563',
-        marginBottom: 8,
-        fontWeight: '600'
     },
     typeRow: {
         flexDirection: 'row',
         gap: 10,
-        marginBottom: 20
+        marginBottom: 20,
+        marginTop: 8,
     },
     typeButton: {
         flex: 1,
         padding: 10,
-        borderRadius: 8,
+        borderRadius: Theme.borderRadius.sm,
         borderWidth: 1,
-        borderColor: '#e5e7eb',
+        borderColor: Theme.colors.border,
         alignItems: 'center'
     },
     typeButtonActive: {
-        backgroundColor: '#059669', // Emerald 600
-        borderColor: '#059669'
+        backgroundColor: Theme.colors.success,
+        borderColor: Theme.colors.success
     },
     typeText: {
-        fontSize: 13,
-        color: '#4b5563'
+        ...Typography.bodySmall,
     },
     typeTextActive: {
-        color: '#fff',
-        fontWeight: 'bold'
+        color: Theme.colors.text.inverse,
+        fontWeight: 'bold',
     },
-    input: {
-        borderWidth: 1,
-        borderColor: '#d1d5db',
-        borderRadius: 8,
-        padding: 10,
+    textArea: {
         height: 100,
         textAlignVertical: 'top',
-        marginBottom: 20,
-        fontSize: 16
+        backgroundColor: Theme.colors.background,
+        color: Theme.colors.text.primary,
+        borderColor: Theme.colors.border,
     },
     actions: {
         flexDirection: 'row',
         justifyContent: 'flex-end',
-        gap: 12
+        gap: 12,
+        marginTop: 10,
     },
     cancelButton: {
         paddingVertical: 10,
         paddingHorizontal: 16
     },
-    cancelText: {
-        color: '#6b7280',
-        fontSize: 16
-    },
     submitButton: {
-        backgroundColor: '#059669',
         paddingVertical: 10,
         paddingHorizontal: 20,
-        borderRadius: 8,
-        opacity: 1
+        backgroundColor: Theme.colors.success,
     },
-    submitText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: 'bold'
-    }
 });

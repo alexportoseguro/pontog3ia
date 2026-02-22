@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { Theme } from '../lib/Theme';
+import { Typography } from '../lib/Typography';
 import { API_URL } from '../lib/api';
 
 type Message = {
@@ -293,7 +294,7 @@ export default function ChatScreen({ user }: { user: any }) {
                 ListHeaderComponent={activeTab === 'ai' ? (
                     <View style={styles.aiWelcomeCard}>
                         <View style={styles.aiWelcomeIcon}>
-                            <Ionicons name="sparkles" size={32} color="#FFF" />
+                            <Ionicons name="sparkles" size={32} color={Theme.colors.surface} />
                         </View>
                         <Text style={styles.aiWelcomeTitle}>Como posso ajudar hoje?</Text>
                         <Text style={styles.aiWelcomeSubtitle}>Estou aqui para gerenciar seus registros e tirar dúvidas.</Text>
@@ -383,7 +384,7 @@ export default function ChatScreen({ user }: { user: any }) {
                         value={inputText}
                         onChangeText={setInputText}
                         placeholder="Escreva sua mensagem..."
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={Theme.colors.text.muted}
                         multiline
                     />
                     <View style={styles.inputActions}>
@@ -391,14 +392,14 @@ export default function ChatScreen({ user }: { user: any }) {
                             onPress={isRecording ? stopRecording : startRecording}
                             style={[styles.actionButton, isRecording && styles.micActive]}
                         >
-                            <Ionicons name={isRecording ? "stop" : "mic"} size={22} color={isRecording ? "#EF4444" : "#64748B"} />
+                            <Ionicons name={isRecording ? "stop" : "mic"} size={22} color={isRecording ? Theme.colors.danger : Theme.colors.text.secondary} />
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={sendMessage}
                             style={[styles.sendButtonPremium, (!inputText.trim() && !loading) && { opacity: 0.5 }]}
                             disabled={loading || !inputText.trim()}
                         >
-                            <Ionicons name="arrow-up" size={24} color="#FFF" />
+                            <Ionicons name="arrow-up" size={24} color={Theme.colors.surface} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -410,21 +411,21 @@ export default function ChatScreen({ user }: { user: any }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
+        backgroundColor: Theme.colors.background,
     },
     headerGlass: {
         backgroundColor: 'rgba(255,255,255,0.8)',
         paddingBottom: 8,
         borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
+        borderBottomColor: Theme.colors.border,
     },
     tabContainer: {
         flexDirection: 'row',
         padding: 4,
         marginHorizontal: 20,
         marginTop: 10,
-        backgroundColor: '#F1F5F9',
-        borderRadius: 16,
+        backgroundColor: Theme.colors.background,
+        borderRadius: Theme.borderRadius.lg,
     },
     tabButton: {
         flex: 1,
@@ -432,23 +433,18 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 12,
+        borderRadius: Theme.borderRadius.md,
     },
     tabActive: {
-        backgroundColor: '#FFFFFF',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
+        backgroundColor: Theme.colors.surface,
+        ...Theme.shadows.soft,
     },
     tabText: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: '#94A3B8',
+        ...Typography.label,
+        color: Theme.colors.text.muted,
     },
     tabTextActive: {
-        color: '#4F46E5',
+        color: Theme.colors.primary,
     },
     listContent: {
         padding: 20,
@@ -458,42 +454,31 @@ const styles = StyleSheet.create({
     aiWelcomeCard: {
         alignItems: 'center',
         padding: 30,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 32,
+        backgroundColor: Theme.colors.surface,
+        borderRadius: Theme.borderRadius.xl,
         marginBottom: 24,
         borderWidth: 1,
-        borderColor: '#F1F5F9',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.02,
-        shadowRadius: 10,
+        borderColor: Theme.colors.border,
+        ...Theme.shadows.soft,
     },
     aiWelcomeIcon: {
         width: 64,
         height: 64,
-        borderRadius: 24,
-        backgroundColor: '#4F46E5',
+        borderRadius: Theme.borderRadius.xl,
+        backgroundColor: Theme.colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 16,
-        shadowColor: '#4F46E5',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
+        ...Theme.shadows.medium,
     },
     aiWelcomeTitle: {
-        fontSize: 20,
-        fontWeight: '900',
-        color: '#1E293B',
+        ...Typography.h3,
         textAlign: 'center',
-        letterSpacing: -0.5,
     },
     aiWelcomeSubtitle: {
-        fontSize: 14,
-        color: '#64748B',
+        ...Typography.bodySmall,
         textAlign: 'center',
         marginTop: 8,
-        lineHeight: 20,
         paddingHorizontal: 20,
     },
     bubbleContainer: {
@@ -510,73 +495,61 @@ const styles = StyleSheet.create({
     bubble: {
         maxWidth: '85%',
         padding: 16,
-        borderRadius: 24,
+        borderRadius: Theme.borderRadius.xl,
     },
     userBubble: {
-        backgroundColor: '#4F46E5',
+        backgroundColor: Theme.colors.primary,
         borderBottomRightRadius: 4,
-        shadowColor: '#4F46E5',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
+        ...Theme.shadows.medium,
     },
     aiBubble: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: Theme.colors.surface,
         borderBottomLeftRadius: 4,
         borderWidth: 1,
-        borderColor: '#F1F5F9',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.03,
-        shadowRadius: 6,
+        borderColor: Theme.colors.border,
+        ...Theme.shadows.soft,
     },
     messageText: {
-        fontSize: 15,
-        lineHeight: 22,
-        fontWeight: '500',
+        ...Typography.body,
     },
     userText: {
-        color: '#FFFFFF',
+        color: Theme.colors.text.inverse,
     },
     aiText: {
-        color: '#1E293B',
+        color: Theme.colors.text.primary,
     },
     timestamp: {
-        fontSize: 10,
+        ...Typography.micro,
         marginTop: 6,
-        fontWeight: '700',
-        opacity: 0.6,
+        opacity: 0.8,
     },
     userTimestamp: {
         color: 'rgba(255,255,255,0.7)',
         alignSelf: 'flex-end',
     },
     aiTimestamp: {
-        color: '#94A3B8',
+        color: Theme.colors.text.muted,
         alignSelf: 'flex-start',
     },
     teamAvatar: {
         width: 36,
         height: 36,
         borderRadius: 14,
-        backgroundColor: '#EEF2FF',
+        backgroundColor: Theme.colors.background,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: '#E0E7FF',
+        borderColor: Theme.colors.border,
     },
     teamAvatarInitial: {
-        fontSize: 14,
+        ...Typography.bodySmall,
         fontWeight: '900',
-        color: '#4F46E5',
+        color: Theme.colors.primary,
     },
     senderName: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: '#4F46E5',
+        ...Typography.caption,
+        color: Theme.colors.primary,
         marginBottom: 4,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
     },
     loadingWrapper: {
         flexDirection: 'row',
@@ -586,32 +559,29 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     loadingText: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#6366F1',
-        textTransform: 'uppercase',
+        ...Typography.caption,
+        color: Theme.colors.primary,
     },
     footer: {
         padding: 16,
-        paddingBottom: Platform.OS === 'ios' ? 44 : 24,
-        backgroundColor: '#FFFFFF',
+        paddingBottom: 24,
+        backgroundColor: Theme.colors.surface,
         borderTopWidth: 1,
-        borderTopColor: '#F1F5F9',
+        borderTopColor: Theme.colors.border,
     },
     inputAreaPremium: {
         flexDirection: 'row',
-        backgroundColor: '#F8FAFC',
-        borderRadius: 24,
+        backgroundColor: Theme.colors.background,
+        borderRadius: Theme.borderRadius.xl,
         padding: 8,
         paddingLeft: 20,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#F1F5F9',
+        borderColor: Theme.colors.border,
     },
     inputPremium: {
         flex: 1,
-        fontSize: 15,
-        color: '#1E293B',
+        ...Typography.body,
         maxHeight: 120,
         paddingVertical: 8,
     },
@@ -624,20 +594,16 @@ const styles = StyleSheet.create({
         padding: 10,
     },
     micActive: {
-        backgroundColor: '#FEF2F2',
-        borderRadius: 12,
+        backgroundColor: Theme.colors.auth.background,
+        borderRadius: Theme.borderRadius.md,
     },
     sendButtonPremium: {
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: '#4F46E5',
+        backgroundColor: Theme.colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#4F46E5',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
+        ...Theme.shadows.medium,
     }
 });
