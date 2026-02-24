@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import {
     HomeIcon,
@@ -13,7 +13,8 @@ import {
     DocumentChartBarIcon,
     MapIcon,
     SparklesIcon,
-    ShieldCheckIcon
+    ShieldCheckIcon,
+    ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline'
 import { createClient } from '@supabase/supabase-js'
 import { useEffect } from 'react'
@@ -43,6 +44,12 @@ export default function DashboardLayout({
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
+    const router = useRouter()
+
+    const handleLogout = async () => {
+        await supabase.auth.signOut()
+        router.push('/login')
+    }
 
     useEffect(() => {
         const fetchUser = async () => {
@@ -151,6 +158,13 @@ export default function DashboardLayout({
                                 <p className="text-sm font-bold text-white truncate">{user?.full_name?.split(' ')[0] || 'Carregando'}</p>
                                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{getRoleLabel(user?.role || '')}</p>
                             </div>
+                            <button
+                                onClick={handleLogout}
+                                className="ml-auto p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all group"
+                                title="Sair do Sistema"
+                            >
+                                <ArrowRightOnRectangleIcon className="h-6 w-6" />
+                            </button>
                         </div>
                     </div>
                 </div>

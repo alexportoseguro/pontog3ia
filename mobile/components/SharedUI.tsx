@@ -1,5 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, View, StyleSheet, TouchableOpacityProps, StyleProp, ViewStyle, TextStyle, ActivityIndicator, TextInput, TextInputProps } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Theme } from '../lib/Theme';
 import { Typography } from '../lib/Typography';
 
@@ -72,16 +73,35 @@ interface InputFieldProps extends TextInputProps {
     wrapperStyle?: StyleProp<ViewStyle>;
 }
 
-export const InputField = ({ label, style, wrapperStyle, ...props }: InputFieldProps) => (
-    <View style={[styles.inputWrapper, wrapperStyle]}>
-        {label && <Text style={Typography.label}>{label}</Text>}
-        <TextInput
-            style={[styles.input, style]}
-            placeholderTextColor={Theme.colors.text.muted}
-            {...props}
-        />
-    </View>
-);
+export const InputField = ({ label, style, wrapperStyle, secureTextEntry, ...props }: InputFieldProps) => {
+    const [isPasswordVisible, setIsPasswordVisible] = React.useState(false);
+
+    return (
+        <View style={[styles.inputWrapper, wrapperStyle]}>
+            {label && <Text style={Typography.label}>{label}</Text>}
+            <View style={styles.inputContainer}>
+                <TextInput
+                    style={[styles.input, style]}
+                    placeholderTextColor={Theme.colors.text.muted}
+                    secureTextEntry={secureTextEntry && !isPasswordVisible}
+                    {...props}
+                />
+                {secureTextEntry && (
+                    <TouchableOpacity
+                        style={styles.eyeIconContainer}
+                        onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                    >
+                        <Ionicons
+                            name={isPasswordVisible ? "eye-off" : "eye"}
+                            size={20}
+                            color={Theme.colors.text.muted}
+                        />
+                    </TouchableOpacity>
+                )}
+            </View>
+        </View>
+    );
+};
 
 const styles = StyleSheet.create({
     card: {
@@ -109,13 +129,23 @@ const styles = StyleSheet.create({
     inputWrapper: {
         gap: 8,
     },
-    input: {
+    inputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: Theme.colors.auth.surface,
-        color: Theme.colors.text.inverse,
-        padding: 18,
         borderRadius: Theme.borderRadius.lg,
-        fontSize: 16,
         borderWidth: 1,
         borderColor: Theme.colors.auth.border,
+    },
+    input: {
+        flex: 1,
+        color: Theme.colors.text.inverse,
+        padding: 18,
+        fontSize: 16,
+    },
+    eyeIconContainer: {
+        padding: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 });

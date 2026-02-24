@@ -21,8 +21,12 @@ let currentRegion = {
     notifyOnExit: true,
 };
 
-// Fetch real config from Database
+// Fetch real config from Database (Optimization: Check if already set)
 async function updateGeofenceConfig() {
+    if (currentRegion.latitude !== -16.440258229684606) {
+        // Already updated from DB or default overridden
+        return;
+    }
     try {
         console.log('Fetching Company Config from DB...');
         const { data, error } = await supabase.from('companies').select('*').single();
@@ -287,10 +291,13 @@ export async function syncRoutePoints() {
         if (!response.ok) {
             const text = await response.text();
             console.error('Failed to sync route points:', response.status, text);
-            // If 4xx error (bad data), discard the queue to prevent infinite loop
-            if (response.status >= 400 && response.status < 500) {
-                console.warn('⚠️ Client error — clearing route queue to prevent infinite retry');
+            // If 4xx error (bad data), discard the queue to prevent infinite loop. 
+            // EXCEPT for 401/403 (Auth/Session expired), where we should keep the data to sync later
+            if (response.status >= 400 && response.status < 500 && response.status !== 401 && response.status !== 403) {
+                console.warn('⚠️ Client error (not auth) — clearing route queue to prevent infinite retry');
                 await AsyncStorage.removeItem(ROUTE_QUEUE_KEY);
+            } else if (response.status === 401 || response.status === 403) {
+                console.warn('⚠️ Session expired (401/403) — keeping route queue for next sync when authenticated');
             }
             return;
         }
@@ -338,7 +345,7 @@ export async function startBackgroundTracking() {
 
     try {
         await Location.startLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME, {
-            accuracy: Location.Accuracy.Balanced,
+            accuracy: Location.Accuracy.Highest,
             timeInterval: 60000, // 1 minute
             distanceInterval: 50, // 50 meters
             deferredUpdatesInterval: 60000,

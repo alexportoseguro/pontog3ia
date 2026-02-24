@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, Alert, TouchableOpacity, TextInput, SafeAreaView, StatusBar, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { StyleSheet, Text, View, Alert, TouchableOpacity, TextInput, SafeAreaView, StatusBar, ScrollView, ActivityIndicator, Platform, AppState, AppStateStatus } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import * as Location from 'expo-location'; // Added import
@@ -46,6 +46,7 @@ function App() {
   // Login State
   const [textEmail, setTextEmail] = useState('');
   const [textPassword, setTextPassword] = useState('');
+  const [saveLogin, setSaveLogin] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Justification State
@@ -56,6 +57,18 @@ function App() {
     fetchCompanySettings();
     // Update clock every second
     const clockInterval = setInterval(() => setCurrentTime(new Date()), 1000);
+
+    // Load saved credentials
+    SecureStore.getItemAsync('saved_email').then(email => {
+      if (email) {
+        setTextEmail(email);
+        setSaveLogin(true);
+      }
+    });
+    SecureStore.getItemAsync('saved_password').then(password => {
+      if (password) setTextPassword(password);
+    });
+
     return () => clearInterval(clockInterval);
   }, []);
 
@@ -117,11 +130,50 @@ function App() {
     }
   }
 
+  const syncStatusWithServer = async (userId: string) => {
+    try {
+      console.log('🔄 Syncing status with server for:', userId);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('current_status')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        const serverStatus = data.current_status || 'out';
+        const mappedStatus: WorkStatus =
+          serverStatus === 'working' ? 'WORKING' :
+            serverStatus === 'break' ? 'BREAK' : 'STOPPED';
+
+        console.log('✅ Server status:', serverStatus, '-> Mapped:', mappedStatus);
+
+        setStatus(mappedStatus);
+        await SecureStore.setItemAsync('work_status', mappedStatus);
+
+        // Manage background services based on synced status
+        if (mappedStatus === 'WORKING') {
+          startGeofencing();
+          startBackgroundTracking();
+        } else {
+          stopGeofencing();
+          stopBackgroundTracking();
+        }
+      }
+    } catch (error) {
+      console.log('❌ Error syncing status:', error);
+      // Fallback to local storage if offline or error
+      restoreStatus();
+    }
+  };
+
   useEffect(() => {
+    // 1. Initial Session Check
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
-        restoreStatus();
+        syncStatusWithServer(session.user.id);
         syncOfflineEvents();
         syncRoutePoints();
         registerForPushNotifications(session.user.id);
@@ -129,16 +181,34 @@ function App() {
       }
     });
 
-    supabase.auth.onAuthStateChange((_event, session) => {
+    // 2. Auth State Change Listener
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
-        restoreStatus();
+        syncStatusWithServer(session.user.id);
         registerForPushNotifications(session.user.id);
         fetchUserProfile(session.user.id);
       } else {
         setFullName(null);
       }
     });
+
+    // 3. AppState Listener - RE-SYNC when app comes to foreground
+    const appStateListener = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session) {
+            syncStatusWithServer(session.user.id);
+            console.log('✨ App foregrounded, status re-synced');
+          }
+        });
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+      appStateListener.remove();
+    };
   }, []);
 
   async function registerForPushNotifications(userId: string) {
@@ -146,8 +216,8 @@ function App() {
     const isExpoGo = Constants.executionEnvironment === 'storeClient'; // 'storeClient' corresponds to Expo Go
 
     if (isExpoGo || Constants.appOwnership === 'expo') {
-      console.log('⚠️ Expo Go detectado: Push Notifications desativadas para evitar erros (Requer Development Build)');
-      return;
+      console.log('⚠️ Expo Go detectado. Tentando registrar token mesmo assim...');
+      // Continue instead of returning to see if it works in this env
     }
 
     if (Platform.OS === 'android') {
@@ -171,7 +241,7 @@ function App() {
 
     try {
       const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId: '4b43fe65-b208-440d-b9f9-509c51480600'
+        projectId: 'f536f7d0-1cef-4bde-89c1-66ce4c983807'
       });
       const token = tokenData.data;
 
@@ -183,17 +253,20 @@ function App() {
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id, token' });
 
-      console.log('✅ Push token registered:', token);
-    } catch (error) {
-      console.log('❌ Error getting push token:', error);
+      console.log('✅ Push token registered in DB:', token);
+    } catch (error: any) {
+      console.log('❌ Error getting push token:', error?.message || error);
     }
   }
 
   const restoreStatus = async () => {
     const saved = await SecureStore.getItemAsync('work_status');
-    if (saved === 'WORKING' || saved === 'BREAK') {
-      setStatus(saved as WorkStatus);
-      if (saved === 'WORKING') startGeofencing();
+    const mapped = (saved === 'WORKING' || saved === 'BREAK') ? saved : 'STOPPED';
+    setStatus(mapped as WorkStatus);
+    if (mapped === 'WORKING') startGeofencing();
+    else {
+      stopGeofencing();
+      stopBackgroundTracking();
     }
   };
 
@@ -230,89 +303,119 @@ function App() {
   };
 
   const executeClockAction = async (action: 'start' | 'pause' | 'resume' | 'stop') => {
+    console.log(`[ClockAction] Starting ${action}...`);
     setLoadingAction(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
 
-    const timestamp = new Date().toISOString();
-    let eventType = '';
-    let locationStr = '';
+    // Safety timeout to clear loading state anyway after 15s
+    const globalTimeout = setTimeout(() => setLoadingAction(false), 15000);
 
     try {
-      // Get current location for the event to ensure Valid POINT format
-      const { status: permStatus } = await Location.requestForegroundPermissionsAsync();
-      if (permStatus === 'granted') {
-        const loc = await Location.getCurrentPositionAsync({});
-        locationStr = `(${loc.coords.longitude},${loc.coords.latitude})`;
-      } else {
-        locationStr = '(0,0)';
+      console.log('[ClockAction] Fetching session...');
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+
+      if (!user || !session) {
+        console.warn('[ClockAction] No session found');
+        Alert.alert("Erro", "Sessão expirada. Por favor, faça login novamente.");
+        return;
       }
 
+      const timestamp = new Date().toISOString();
+      let eventType = '';
+      let locationStr = '';
+
+      // 1. Optimized GPS Acquisition with manual timeout backup
+      console.log('[ClockAction] Requesting location...');
+      try {
+        const { status: permStatus } = await Location.requestForegroundPermissionsAsync();
+        if (permStatus === 'granted') {
+          // Manual timeout helper
+          const locationPromise = Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Highest,
+          });
+
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('GPS_TIMEOUT')), 5000)
+          );
+
+          console.log('[ClockAction] Waiting for GPS lock (5s max)...');
+          const loc = await Promise.race([locationPromise, timeoutPromise]) as Location.LocationObject;
+          locationStr = `(${loc.coords.longitude},${loc.coords.latitude})`;
+          console.log('[ClockAction] GPS fixed');
+        } else {
+          console.warn('[ClockAction] Location permission denied');
+          locationStr = '(0,0)';
+        }
+      } catch (locError: any) {
+        console.warn('[ClockAction] GPS failed or timed out:', locError.message);
+        locationStr = '(0,0)'; // Fallback to avoid blocking the whole action
+      }
+
+      // 2. Determine Event Type & Service Actions (Optimized: No wait)
       if (action === 'start') {
         eventType = 'clock_in';
-        // Start Geofencing & Tracking
-        const geoStarted = await startGeofencing();
-        const trackStarted = await startBackgroundTracking();
-        if (geoStarted) console.log('Geofencing Service Started');
-        if (trackStarted) console.log('Location Tracking Service Started');
-        await updateStatus('WORKING');
-        // Alert moved to AFTER success
+        startGeofencing();
+        startBackgroundTracking();
         checkLateArrival();
       }
       else if (action === 'pause') {
         eventType = 'break_start';
-        await stopGeofencing(); // Stop tracking during break (privacy)
-        await updateStatus('BREAK');
+        stopGeofencing();
       }
       else if (action === 'resume') {
         eventType = 'break_end';
-        await startGeofencing();
-        await updateStatus('WORKING');
+        startGeofencing();
       }
       else if (action === 'stop') {
         eventType = 'clock_out';
-        // Stop Geofencing & Tracking
-        await stopGeofencing();
-        await stopBackgroundTracking();
-        await updateStatus('STOPPED');
+        stopGeofencing();
+        stopBackgroundTracking();
       }
 
-
+      // 3. Register Point via API with Timeout
       if (eventType) {
-        // CHANGED: Use API instead of direct insert to trigger Anomaly Detection
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
+        console.log(`[ClockAction] Registering ${eventType} via API...`);
 
-        const response = await fetch(`${API_URL}/api/points`, {
+        const apiPromise = fetch(`${API_URL}/api/points`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${session.access_token}`
           },
           body: JSON.stringify({
             eventType,
-            location: locationStr, // "(lon,lat)"
+            location: locationStr,
             timestamp
           })
         });
 
+        const apiTimeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('NETWORK_TIMEOUT')), 8000)
+        );
+
+        const response = await Promise.race([apiPromise, apiTimeout]) as Response;
         const result = await response.json();
 
         if (!response.ok) {
           throw new Error(result.error || 'Failed to register point via API');
         }
 
-        console.log('✅ Point registered via API:', result);
+        console.log('[ClockAction] ✅ Success:', result);
 
-        // Profile update is now handled by API to ensure consistency
-        // But we still update local state if needed.
-        const ps = action === 'start' || action === 'resume' ? 'working' : action === 'pause' ? 'break' : 'out';
-        await updateStatus(ps === 'working' ? 'WORKING' : ps === 'break' ? 'BREAK' : 'STOPPED');
+        // 4. Update Final State (Once, after success)
+        const ps = action === 'start' || action === 'resume' ? 'WORKING' : action === 'pause' ? 'BREAK' : 'STOPPED';
+        setStatus(ps as WorkStatus);
+        await SecureStore.setItemAsync('work_status', ps);
       }
     } catch (error: any) {
-      Alert.alert("Erro", "Falha ao registrar ponto: " + error.message);
+      console.error('[ClockAction] ❌ Error:', error);
+      const msg = error.message === 'NETWORK_TIMEOUT' ? 'Tempo de conexão esgotado. Verifique sua internet.' :
+        error.message === 'GPS_TIMEOUT' ? 'Não foi possível obter sinal de GPS.' : error.message;
+      Alert.alert("Erro", "Falha ao registrar ponto: " + msg);
     } finally {
+      clearTimeout(globalTimeout);
       setLoadingAction(false);
+      console.log('[ClockAction] Finished process.');
     }
   };
 
@@ -323,7 +426,18 @@ function App() {
       password: textPassword,
     });
     setLoading(false);
-    if (error) Alert.alert("Erro", error.message);
+
+    if (error) {
+      Alert.alert("Erro", error.message);
+    } else {
+      if (saveLogin) {
+        await SecureStore.setItemAsync('saved_email', textEmail);
+        await SecureStore.setItemAsync('saved_password', textPassword);
+      } else {
+        await SecureStore.deleteItemAsync('saved_email');
+        await SecureStore.deleteItemAsync('saved_password');
+      }
+    }
   };
 
   if (isBiometricAuth) {
@@ -382,6 +496,14 @@ function App() {
               secureTextEntry
             />
 
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', marginTop: -5, marginBottom: 5 }}
+              onPress={() => setSaveLogin(!saveLogin)}
+            >
+              <Ionicons name={saveLogin ? "checkbox" : "square-outline"} size={22} color={Theme.colors.primary} />
+              <Text style={{ marginLeft: 8, color: Theme.colors.text.secondary, fontWeight: '500' }}>Lembrar minhas credenciais</Text>
+            </TouchableOpacity>
+
             <Button
               title={loading ? "Verificando..." : "Entrar no Sistema"}
               onPress={handleLogin}
@@ -394,7 +516,12 @@ function App() {
         <View style={styles.dashboardContainer}>
           <View style={styles.dashboardHeader}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.greeting}>Bem-vindo,</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.greeting}>Bem-vindo,</Text>
+                <TouchableOpacity onPress={() => session && syncStatusWithServer(session.user.id)}>
+                  <Ionicons name="refresh-circle" size={18} color={Theme.colors.primary} />
+                </TouchableOpacity>
+              </View>
               <Text style={styles.username} numberOfLines={1}>
                 {fullName || session.user.email?.split('@')[0]}
               </Text>

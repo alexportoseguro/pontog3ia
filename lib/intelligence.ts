@@ -28,9 +28,10 @@ type AnomalyResult = {
 export async function detectAnomalies(
     userId: string,
     companyId: string,
-    location: string | null, // Text format "lat,lon" or address? Usually "lat,lon" from mobile
+    location: string | null,
     timestamp: Date,
-    supabaseClient: any // Pass the admin client to avoid RLS issues
+    supabaseClient: any,
+    companyConfig?: { latitude: number; longitude: number; radius_meters: number } // NEW: Optional optimization
 ): Promise<AnomalyResult> {
     const result: AnomalyResult = { isFlagged: false, reason: null }
     const reasons: string[] = []
@@ -57,11 +58,16 @@ export async function detectAnomalies(
                 // Or use `location_settings` table if it exists.
                 // Let's assume we check against "Company HQ".
 
-                const { data: company } = await supabaseClient
-                    .from('companies')
-                    .select('latitude, longitude, radius_meters')
-                    .eq('id', companyId)
-                    .single()
+                let company = companyConfig;
+
+                if (!company) {
+                    const { data } = await supabaseClient
+                        .from('companies')
+                        .select('latitude, longitude, radius_meters')
+                        .eq('id', companyId)
+                        .single()
+                    company = data;
+                }
 
                 if (company && company.latitude && company.longitude) {
                     const distance = getDistanceFromLatLonInKm(lat, lon, company.latitude, company.longitude)

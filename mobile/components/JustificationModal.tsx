@@ -27,7 +27,7 @@ export default function JustificationModal({ visible, onClose, userId }: Props) 
             const { error } = await supabase.from('justifications').insert({
                 user_id: userId,
                 type,
-                reason: description,
+                description: description, // Send as description to match DB
                 status: 'pending' // pending approval
             });
 

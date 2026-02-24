@@ -17,6 +17,7 @@ type Employee = {
     role: string
     current_status: 'working' | 'break' | 'out' | 'offline'
     last_seen?: string
+    phone?: string
     shift_rule_id?: string
     shift_rules?: { name: string }
     employee_shifts?: { shift_rules: { id: string, name: string } }[]
@@ -48,6 +49,7 @@ export default function EmployeesPage() {
         email: '',
         password: '',
         role: 'employee',
+        phone: '',
         shiftId: 'none',
         shiftIds: [] as string[]
     })
@@ -169,7 +171,7 @@ export default function EmployeesPage() {
 
             alert('✅ Funcionário criado com sucesso!')
             setShowCreateModal(false)
-            setNewEmployee({ name: '', email: '', password: '', role: 'employee', shiftId: 'none', shiftIds: [] })
+            setNewEmployee({ name: '', email: '', password: '', role: 'employee', phone: '', shiftId: 'none', shiftIds: [] })
             fetchEmployees()
         } catch (err: any) {
             alert('❌ Erro ao criar: ' + err.message)
@@ -195,6 +197,7 @@ export default function EmployeesPage() {
                     id: selectedEmployee.id,
                     name: selectedEmployee.full_name,
                     role: selectedEmployee.role,
+                    phone: selectedEmployee.phone,
                     shiftIds: selectedEmployee.employee_shifts?.map((es: any) => es.shift_rules.id) || [],
                     shiftId: 'none' // Legacy
                 })
@@ -382,7 +385,8 @@ export default function EmployeesPage() {
                                 </div>
 
                                 <h3 className="text-xl font-black text-slate-900 tracking-tight leading-tight">{employee.full_name || 'Sem Nome'}</h3>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 mb-6">{employee.email || '-'}</p>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 mb-2">{employee.email || '-'}</p>
+                                <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-6">{employee.phone || 'Sem telefone'}</p>
 
                                 <div className="grid grid-cols-2 gap-4 mb-8">
                                     <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
@@ -516,6 +520,19 @@ export default function EmployeesPage() {
                                 <p className="mt-1 text-xs text-gray-500">Funcionário deve trocar no primeiro acesso</p>
                             </div>
 
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Telefone para SMS
+                                </label>
+                                <input
+                                    className="w-full border border-gray-300 p-2.5 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
+                                    placeholder="+55 (11) 99999-9999"
+                                    value={newEmployee.phone}
+                                    onChange={e => setNewEmployee({ ...newEmployee, phone: e.target.value })}
+                                />
+                                <p className="mt-1 text-xs text-gray-500">Formato internacional: +5511999999999</p>
+                            </div>
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -575,7 +592,7 @@ export default function EmployeesPage() {
                             <button
                                 onClick={() => {
                                     setShowCreateModal(false)
-                                    setNewEmployee({ name: '', email: '', password: '', role: 'employee', shiftId: 'none', shiftIds: [] })
+                                    setNewEmployee({ name: '', email: '', password: '', role: 'employee', phone: '', shiftId: 'none', shiftIds: [] })
                                 }}
                                 disabled={inviteLoading}
                                 className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50"
@@ -638,6 +655,14 @@ export default function EmployeesPage() {
                                     <option value="manager">Gerente</option>
                                     <option value="admin">Admin</option>
                                 </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
+                                <input
+                                    className="w-full border border-gray-300 p-2 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                    value={selectedEmployee.phone || ''}
+                                    onChange={e => setSelectedEmployee({ ...selectedEmployee, phone: e.target.value })}
+                                />
                             </div>
 
                             <div>

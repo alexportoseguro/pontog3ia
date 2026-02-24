@@ -85,7 +85,7 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json()
-        const { email, password, name, role, shiftId, shiftIds } = body
+        const { email, password, name, role, phone, shiftId, shiftIds } = body
 
         // 1. Create Auth User
         const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
@@ -107,6 +107,7 @@ export async function POST(request: Request) {
                 email,
                 full_name: name,
                 role: role || 'employee',
+                phone,
                 company_id: requester.company_id,
                 shift_rule_id: shiftId !== 'none' ? shiftId : null // Legacy support
             })
@@ -119,7 +120,7 @@ export async function POST(request: Request) {
             action: 'CREATE_EMPLOYEE',
             tableName: 'profiles',
             recordId: newUser.user.id,
-            newData: { email, name, role, shiftId, shiftIds, company_id: requester.company_id },
+            newData: { email, name, role, phone, shiftId, shiftIds, company_id: requester.company_id },
             ipAddress: request.headers.get('x-forwarded-for') || 'unknown'
         })
 
@@ -174,7 +175,7 @@ export async function PUT(request: Request) {
         }
 
         const body = await request.json()
-        const { id, name, role, email, shiftId, shiftIds } = body
+        const { id, name, role, email, phone, shiftId, shiftIds } = body
 
         if (!id) return NextResponse.json({ error: 'User ID required' }, { status: 400 })
 
@@ -189,6 +190,7 @@ export async function PUT(request: Request) {
         const updates: any = {}
         if (name) updates.full_name = name
         if (role) updates.role = role
+        if (phone !== undefined) updates.phone = phone
         if (shiftId) updates.shift_rule_id = shiftId !== 'none' ? shiftId : null
 
         if (Object.keys(updates).length > 0) {
@@ -225,7 +227,7 @@ export async function PUT(request: Request) {
             tableName: 'profiles',
             recordId: id,
             oldData,
-            newData: { name, role, email, shiftIds },
+            newData: { name, role, email, phone, shiftIds },
             ipAddress: request.headers.get('x-forwarded-for') || 'unknown'
         })
 
