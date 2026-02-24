@@ -366,10 +366,15 @@ export async function startBackgroundTracking() {
 
 export async function stopBackgroundTracking() {
     try {
-        await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME);
-        console.log('Background tracking stopped');
+        const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME);
+        if (hasStarted) {
+            await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME);
+            console.log('Background tracking stopped');
+        } else {
+            console.log('Background tracking is not running, skipping stop.');
+        }
     } catch (err) {
-        // ignore
+        console.log('Error stopping background tracking:', err);
     }
 }
 
@@ -405,9 +410,14 @@ export async function startGeofencing() {
 
 export async function stopGeofencing() {
     try {
-        await Location.stopGeofencingAsync(GEOFENCE_TASK_NAME);
-        console.log('Geofencing stopped.');
+        const hasStarted = await Location.hasStartedGeofencingAsync(GEOFENCE_TASK_NAME);
+        if (hasStarted) {
+            await Location.stopGeofencingAsync(GEOFENCE_TASK_NAME);
+            console.log('Geofencing stopped.');
+        } else {
+            console.log('Geofencing is not running, skipping stop.');
+        }
     } catch (e) {
-        // ignore if not running
+        console.log('Error stopping geofencing:', e);
     }
 }
