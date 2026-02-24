@@ -329,19 +329,32 @@ function App() {
       try {
         const { status: permStatus } = await Location.requestForegroundPermissionsAsync();
         if (permStatus === 'granted') {
-          // Manual timeout helper
-          const locationPromise = Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Highest,
-          });
+          // Check for recent known location first to speed up the process
+          let loc = await Location.getLastKnownPositionAsync();
+          const isFresh = loc && (Date.now() - loc.timestamp < 120000); // 2 minutes
 
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('GPS_TIMEOUT')), 5000)
-          );
+          if (!isFresh) {
+            // Manual timeout helper if we really need to fetch a new one
+            const locationPromise = Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.High, // High instead of Highest is generally much faster and reliable indoors
+            });
 
-          console.log('[ClockAction] Waiting for GPS lock (5s max)...');
-          const loc = await Promise.race([locationPromise, timeoutPromise]) as Location.LocationObject;
-          locationStr = `(${loc.coords.longitude},${loc.coords.latitude})`;
-          console.log('[ClockAction] GPS fixed');
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('GPS_TIMEOUT')), 6000)
+            );
+
+            console.log('[ClockAction] Waiting for GPS lock (6s max)...');
+            loc = await Promise.race([locationPromise, timeoutPromise]) as Location.LocationObject;
+          } else {
+            console.log('[ClockAction] Using fresh Last Known Location');
+          }
+
+          if (loc) {
+            locationStr = `(${loc.coords.longitude},${loc.coords.latitude})`;
+            console.log('[ClockAction] GPS fixed');
+          } else {
+            locationStr = '(0,0)';
+          }
         } else {
           console.warn('[ClockAction] Location permission denied');
           locationStr = '(0,0)';

@@ -337,19 +337,19 @@ export async function clearLocalQueues(): Promise<{ events: number; routes: numb
 
 export async function startBackgroundTracking() {
     console.log('Starting Background Tracking...');
-    const { status } = await Location.requestBackgroundPermissionsAsync();
+    const { status } = await Location.getBackgroundPermissionsAsync();
     if (status !== 'granted') {
-        console.error('Background location permission denied');
+        console.warn('Background location permission denied or not requested yet');
         return false;
     }
 
     try {
         await Location.startLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME, {
-            accuracy: Location.Accuracy.Highest,
-            timeInterval: 60000, // 1 minute
-            distanceInterval: 50, // 50 meters
-            deferredUpdatesInterval: 60000,
-            deferredUpdatesDistance: 50,
+            accuracy: Location.Accuracy.Balanced, // Saves battery compared to Highest
+            timeInterval: 300000, // 5 minutes instead of 1 min
+            distanceInterval: 200, // 200 meters instead of 50m
+            deferredUpdatesInterval: 300000,
+            deferredUpdatesDistance: 200,
             foregroundService: {
                 notificationTitle: "Rastreamento Ativo",
                 notificationBody: "Registrando sua rota de trabalho...",
@@ -366,6 +366,9 @@ export async function startBackgroundTracking() {
 
 export async function stopBackgroundTracking() {
     try {
+        const { status } = await Location.getBackgroundPermissionsAsync();
+        if (status !== 'granted') return; // Cannot safely check hasStarted without permission
+
         const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME);
         if (hasStarted) {
             await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME);
@@ -383,16 +386,19 @@ export async function startGeofencing() {
     const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
 
     if (foregroundStatus !== 'granted') {
-        console.error('Permission to access location was denied (Foreground)');
+        console.warn('Permission to access location was denied (Foreground)');
         return false;
     }
 
-    console.log('Requesting Background Permission...');
-    const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
+    const { status: backgroundStatus } = await Location.getBackgroundPermissionsAsync();
 
     if (backgroundStatus !== 'granted') {
-        console.error('Permission to access location was denied (Background)');
-        return false;
+        console.warn('Permission to access location was denied (Background)');
+        // Try requesting it once if not already granted
+        const { status: newBgStatus } = await Location.requestBackgroundPermissionsAsync();
+        if (newBgStatus !== 'granted') {
+            return false;
+        }
     }
 
     await updateGeofenceConfig();
@@ -410,6 +416,9 @@ export async function startGeofencing() {
 
 export async function stopGeofencing() {
     try {
+        const { status } = await Location.getBackgroundPermissionsAsync();
+        if (status !== 'granted') return; // Avoid crashing if we don't have permission
+
         const hasStarted = await Location.hasStartedGeofencingAsync(GEOFENCE_TASK_NAME);
         if (hasStarted) {
             await Location.stopGeofencingAsync(GEOFENCE_TASK_NAME);
